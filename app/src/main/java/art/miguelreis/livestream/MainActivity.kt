@@ -55,7 +55,7 @@ class MainActivity: Activity() {
    if(session.isBlank()){Toast.makeText(this,"Inicie primeiro a partilha",Toast.LENGTH_SHORT).show();return@button}
    val link=endpoint()+"/watch/"+session
    startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{
-    type="text/plain";putExtra(Intent.EXTRA_TEXT","Veja o meu ecrã em direto: $link")
+    type="text/plain";putExtra(Intent.EXTRA_TEXT,"Veja o meu ecrã em direto: $link")
    },"Enviar link"))
   })
   root.addView(button("PARAR TRANSMISSÃO"){
