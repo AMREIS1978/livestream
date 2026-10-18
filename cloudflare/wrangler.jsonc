@@ -1,0 +1,9 @@
+{
+  "name": "livestream-free",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-01",
+  "durable_objects": {
+    "bindings": [{ "name": "STREAMS", "class_name": "StreamRoom" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["StreamRoom"] }]
+}
