@@ -22,6 +22,7 @@ class CaptureService: Service() {
  private val worker=Executors.newSingleThreadExecutor()
  private val busy=AtomicBoolean(false)
  private var endpoint="";private var session=""
+ private var lastFrameAt=0L
  override fun onBind(intent:Intent?)=null
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
@@ -36,7 +37,7 @@ class CaptureService: Service() {
   @Suppress("DEPRECATION")
   val data=if(Build.VERSION.SDK_INT>=33)intent?.getParcelableExtra("resultData",Intent::class.java) else intent?.getParcelableExtra("resultData")
   if(data==null){stopSelf();return START_NOT_STICKY}
-  projection=mgr.getMediaProjection(intent.getIntExtra("resultCode",Activity.RESULT_CANCELED),data)
+  projection=mgr.getMediaProjection((intent?.getIntExtra("resultCode",Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED),data)
   val handler=Handler(Looper.getMainLooper())
   projection?.registerCallback(object:MediaProjection.Callback(){override fun onStop(){stopSelf()}},handler)
   val metrics=resources.displayMetrics
@@ -44,7 +45,9 @@ class CaptureService: Service() {
   reader=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2)
   reader?.setOnImageAvailableListener({ r ->
    val image=r.acquireLatestImage()?:return@setOnImageAvailableListener
-   if(!busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
+   val now=android.os.SystemClock.elapsedRealtime()
+   if(now-lastFrameAt<700 || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
+   lastFrameAt=now
    try {
     val plane=image.planes[0];val pixelStride=plane.pixelStride;val rowStride=plane.rowStride
     val bmp=Bitmap.createBitmap(w+((rowStride-pixelStride*w)/pixelStride),h,Bitmap.Config.ARGB_8888)
