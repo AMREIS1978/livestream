@@ -21,13 +21,13 @@ class CaptureService: Service() {
  private var display:android.hardware.display.VirtualDisplay?=null
  private val worker=Executors.newSingleThreadExecutor()
  private val busy=AtomicBoolean(false)
- private var endpoint="";private var session=""
+ private var endpoint="";private var session="";private var publisherKey=""
  private var lastFrameAt=0L
  override fun onBind(intent:Intent?)=null
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
   if(projection!=null)return START_NOT_STICKY
-  endpoint=intent?.getStringExtra("endpoint")?:"";session=intent?.getStringExtra("session")?:""
+  endpoint=intent?.getStringExtra("endpoint")?:"";session=intent?.getStringExtra("session")?:"";publisherKey=intent?.getStringExtra("publisherKey")?:""
   val channel=NotificationChannel("capture","Partilha de ecrã",NotificationManager.IMPORTANCE_LOW)
   (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
   val stop=PendingIntent.getService(this,0,Intent(this,CaptureService::class.java).apply{action="STOP"},PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -58,7 +58,7 @@ class CaptureService: Service() {
     worker.execute { try {
      val conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
      conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=5000;conn.readTimeout=5000
-     conn.setRequestProperty("Content-Type","image/jpeg")
+     conn.setRequestProperty("Content-Type","image/jpeg")\n     conn.setRequestProperty("X-Publish-Key",publisherKey)
      conn.outputStream.use{it.write(bytes)}
      conn.inputStream.close();conn.disconnect()
     } catch(_:Exception){} finally {busy.set(false)} }
