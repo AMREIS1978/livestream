@@ -1,28 +1,31 @@
-# LiveStream
+# LiveStream — Android
 
-Aplicação Android para partilhar o ecrã e áudio permitido do telemóvel através de um link que pode ser enviado por WhatsApp.
+Aplicação experimental de partilha do ecrã do Android por link.
 
-## Experiência pretendida
+## Interface
+- **Iniciar partilha do ecrã**: solicita a autorização oficial do Android.
+- **Enviar link pelo WhatsApp**: abre a partilha de um endereço público para os espectadores.
+- **Parar transmissão**: termina o serviço de captura.
 
-1. O utilizador abre a app e inicia a partilha com consentimento explícito do Android.
-2. A app executa um serviço em primeiro plano com notificação visível enquanto transmite, mesmo que a interface da app esteja em segundo plano.
-3. É criado um link de sessão para abrir no navegador, sem conta ou palavra-passe para espectadores.
-4. A app permite copiar o link, partilhar por WhatsApp, ver o número de espectadores e terminar a transmissão.
+## Estado real
+- A captura de imagem do Android e o envio periódico de imagens JPEG estão implementados.
+- **Não existe ainda áudio**, vídeo fluido/WebRTC, contador de espectadores ou servidor público publicado.
+- O link só funciona depois de publicar o relay gratuito e configurar o URL na compilação.
+- Não contorna proteções DRM de aplicações de televisão ou de outros serviços.
+- O protótipo deve ser utilizado apenas para testes com conteúdos que tenha autorização para transmitir.
 
-## Arquitetura proposta
+## Publicação gratuita
+Consulte [cloudflare/README.md](cloudflare/README.md) para publicar o relay na Cloudflare Workers e configurar a variável GitHub Actions `LIVESTREAM_SERVER_URL`.
+Depois, a compilação da APK é automática em [GitHub Actions](../../actions). Sem a variável, a APK informa que falta publicar o servidor em vez de criar um link inutilizável.
 
-- Android nativo Kotlin, MediaProjection para imagem e AudioPlaybackCapture para áudio permitido.
-- WebRTC com sinalização e infraestrutura de retransmissão para vários espectadores.
-- Página web para assistir em telemóvel ou computador.
-- GitHub Actions para compilar APK de teste e atualizar a mesma aplicação com assinatura estável.
+## Desenvolvimento
+- Android Kotlin / MediaProjection / serviço foreground
+- Cloudflare Workers + Durable Objects como relay experimental
+- GitHub Actions para gerar APK de teste
+- Plano gratuito sujeito aos limites dos fornecedores. Sem garantia de espectadores ilimitados.
 
-## Limitações e segurança
-
-- Cada sessão de captura requer consentimento do utilizador conforme as regras do Android.
-- Áudio e vídeo protegidos por DRM, incluindo certos serviços de televisão, podem ser bloqueados e não serão contornados.
-- Um link sem autenticação pode ser reencaminhado; cada sessão deverá usar identificador imprevisível e expirar quando terminar.
-- Não publicar chaves privadas, tokens ou credenciais no repositório.
-
-## Estado
-
-Repositório inicializado. Código Android, backend e APK ainda por implementar.
+## Próximas etapas
+1. Validar compilação Android e teste real entre dois telemóveis.
+2. Substituir JPEG por WebRTC ou outro transporte de vídeo eficiente.
+3. Capturar e transmitir apenas o áudio permitido pelo Android.
+4. Implementar autenticação robusta do publicador, controlo de sessões, expiração e testes de carga.
