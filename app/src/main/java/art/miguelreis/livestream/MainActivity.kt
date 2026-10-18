@@ -4,54 +4,77 @@ import android.content.*
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.widget.*
-import android.view.View
+import android.graphics.Color
 import java.util.UUID
 
 class MainActivity: Activity() {
- private val requestCode = 123
- private lateinit var status: TextView
- private lateinit var endpoint: EditText
- private var session = ""
- override fun onCreate(savedInstanceState: Bundle?) {
+ private val requestCode=123
+ private lateinit var status:TextView
+ private var session=""
+ private val prefs by lazy { getSharedPreferences("settings",MODE_PRIVATE) }
+ private fun endpoint()=prefs.getString("endpoint","")!!.trim().trimEnd('/')
+ private fun button(label:String, action:()->Unit)=Button(this).apply {
+  text=label; textSize=17f;setPadding(16,18,16,18);setOnClickListener{action()}
+ }
+ private fun configure(after:()->Unit={}) {
+  val input=EditText(this).apply {
+   hint="https://meu-servidor.pt";setSingleLine(true);setText(endpoint())
+   inputType=android.text.InputType.TYPE_TEXT_VARIATION_URI
+  }
+  AlertDialog.Builder(this).setTitle("Configurar servidor")
+   .setMessage("Esta configuração é necessária uma única vez. O servidor tem de estar publicado na Internet com HTTPS.")
+   .setView(input).setNegativeButton("Cancelar",null)
+   .setPositiveButton("Guardar"){_,_->
+    val url=input.text.toString().trim().trimEnd('/')
+    if(url.startsWith("https://") && url.length>10 && !url.contains(" ")) {
+     prefs.edit().putString("endpoint",url).apply();after()
+    } else Toast.makeText(this,"Introduza um endereço HTTPS válido",Toast.LENGTH_LONG).show()
+   }.show()
+ }
+ private fun startCapture(){
+  if(endpoint().isBlank()){configure { startCapture() };return}
+  session=UUID.randomUUID().toString()
+  val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+  startActivityForResult(mgr.createScreenCaptureIntent(),requestCode)
+ }
+ override fun onCreate(savedInstanceState:Bundle?){
   super.onCreate(savedInstanceState)
-  val prefs = getSharedPreferences("settings", MODE_PRIVATE)
-  val layout = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(32,48,32,32) }
-  layout.addView(TextView(this).apply { text="LiveStream"; textSize=30f })
-  layout.addView(TextView(this).apply { text="Partilhe o ecrã através de um link. Não partilhe dados privados." })
-  endpoint=EditText(this).apply { hint="Servidor HTTPS (ex.: https://seu-servidor.com)"; setSingleLine(true); setText(prefs.getString("endpoint","")) }
-  layout.addView(endpoint)
-  status=TextView(this).apply { text="Transmissão parada" }
-  layout.addView(status)
-  layout.addView(Button(this).apply { text="Iniciar transmissão"; setOnClickListener {
-   val url=endpoint.text.toString().trim().trimEnd('/')
-   if(!url.startsWith("https://")) { Toast.makeText(this@MainActivity,"Introduza um servidor HTTPS válido",Toast.LENGTH_LONG).show();return@setOnClickListener }
-   prefs.edit().putString("endpoint",url).apply()
-   session=UUID.randomUUID().toString()
-   val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-   startActivityForResult(mgr.createScreenCaptureIntent(),requestCode)
-  } })
-  layout.addView(Button(this).apply { text="Partilhar link por WhatsApp"; setOnClickListener {
-   if(session.isEmpty()) { Toast.makeText(this@MainActivity,"Inicie a transmissão",Toast.LENGTH_SHORT).show();return@setOnClickListener }
-   val link=endpoint.text.toString().trim().trimEnd('/')+"/watch/"+session
-   val intent=Intent(Intent.ACTION_SEND).apply { type="text/plain";putExtra(Intent.EXTRA_TEXT,link) }
-   startActivity(Intent.createChooser(intent,"Partilhar transmissão"))
-  } })
-  layout.addView(Button(this).apply { text="Parar transmissão";setOnClickListener {
-   startService(Intent(this@MainActivity,CaptureService::class.java).apply { action="STOP" })
-   status.text="Transmissão parada";session=""
-  } })
-  setContentView(layout)
+  val root=LinearLayout(this).apply{
+   orientation=LinearLayout.VERTICAL;setPadding(36,70,36,32)
+   setBackgroundColor(Color.rgb(12,18,33))
+  }
+  fun title(t:String,size:Float)=TextView(this).apply {
+   text=t;textSize=size;setTextColor(Color.WHITE);setPadding(0,0,0,28)
+  }
+  root.addView(title("LiveStream",32f))
+  root.addView(title("O seu ecrã, em direto. Partilhe o link com quem quiser.",17f))
+  status=title("● Transmissão parada",16f)
+  root.addView(status)
+  root.addView(button("●  INICIAR PARTILHA DO ECRÃ"){startCapture()})
+  root.addView(button("PARTILHAR LINK POR WHATSAPP"){
+   if(session.isBlank()){Toast.makeText(this,"Inicie primeiro a partilha",Toast.LENGTH_SHORT).show();return@button}
+   val link=endpoint()+"/watch/"+session
+   startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{
+    type="text/plain";putExtra(Intent.EXTRA_TEXT","Veja o meu ecrã em direto: $link")
+   },"Enviar link"))
+  })
+  root.addView(button("PARAR TRANSMISSÃO"){
+   startService(Intent(this,CaptureService::class.java).apply{action="STOP"})
+   session="";status.text="● Transmissão parada"
+  })
+  root.addView(button("⚙ Configuração do servidor"){configure()})
+  root.addView(title("A captura exige autorização do Android. Aplicações protegidas podem bloquear imagem e áudio. Nesta versão, apenas a imagem é enviada.",13f))
+  setContentView(root)
  }
  @Deprecated("Legacy activity result")
- override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?) {
+ override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
   super.onActivityResult(requestCode,resultCode,data)
-  if(requestCode==this.requestCode && resultCode==RESULT_OK && data!=null) {
-   val intent=Intent(this,CaptureService::class.java).apply {
+  if(requestCode==this.requestCode && resultCode==RESULT_OK && data!=null){
+   startForegroundService(Intent(this,CaptureService::class.java).apply {
     putExtra("resultCode",resultCode);putExtra("resultData",data)
-    putExtra("endpoint",endpoint.text.toString().trim().trimEnd('/'));putExtra("session",session)
-   }
-   startForegroundService(intent)
-   status.text="Transmissão iniciada: "+session
-  } else { session="";status.text="Captura não autorizada" }
+    putExtra("endpoint",endpoint());putExtra("session",session)
+   })
+   status.text="● A partilhar o ecrã"
+  } else {session="";status.text="● Captura não autorizada"}
  }
 }
