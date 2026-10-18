@@ -58,7 +58,8 @@ class CaptureService: Service() {
     worker.execute { try {
      val conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
      conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=5000;conn.readTimeout=5000
-     conn.setRequestProperty("Content-Type","image/jpeg")\n     conn.setRequestProperty("X-Publish-Key",publisherKey)
+     conn.setRequestProperty("Content-Type","image/jpeg")
+     conn.setRequestProperty("X-Publish-Key",publisherKey)
      conn.outputStream.use{it.write(bytes)}
      conn.inputStream.close();conn.disconnect()
     } catch(_:Exception){} finally {busy.set(false)} }
