@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class CaptureService: Service() {
  private var projection:MediaProjection?=null
- private var micEnabled=false
- private var cameraMode=0
+ @Volatile private var micEnabled=false
+ @Volatile private var cameraMode=0
  private var cameraInset:CameraInset?=null
  private var audioRecorder:AudioRecord?=null
  private var audioThread:Thread?=null
@@ -64,6 +64,13 @@ class CaptureService: Service() {
  override fun onBind(intent:Intent?)=null
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
+  if(intent?.action=="CONTROL"){
+   val nextCamera=intent.getIntExtra("cameraMode",cameraMode)
+   val nextMic=intent.getBooleanExtra("micEnabled",micEnabled)
+   if(nextCamera!=cameraMode){cameraInset?.stop();cameraInset=null;cameraMode=nextCamera;if(cameraMode!=0 && checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start())cameraInset=null}}}
+   if(nextMic!=micEnabled){micEnabled=nextMic;if(micEnabled && checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startMicrophone() else stopMicrophone()}
+   return START_NOT_STICKY
+  }
   if(projection!=null)return START_NOT_STICKY
   endpoint=intent?.getStringExtra("endpoint")?:"";session=intent?.getStringExtra("session")?:"";publisherKey=intent?.getStringExtra("publisherKey")?:"";sharedText=intent?.getStringExtra("sharedText")?:"";saveAlongside=intent?.getBooleanExtra("saveAlongside",false)==true;micEnabled=intent?.getBooleanExtra("micEnabled",false)==true && checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED
   cameraMode=intent?.getIntExtra("cameraMode",0)?:0
@@ -180,7 +187,9 @@ class CaptureService: Service() {
   reportState(false)
   return START_NOT_STICKY
  }
+  private fun stopMicrophone(){audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();audioThread=null}
   private fun startMicrophone(){
+  if(audioRunning)return
   try{
    val rate=16000
    val minimum=AudioRecord.getMinBufferSize(rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT)
@@ -210,5 +219,5 @@ class CaptureService: Service() {
    },"LiveStreamAudio").apply{isDaemon=true;start()}
   }catch(_:Exception){audioRunning=false}
  }
- override fun onDestroy(){if(lastError.isBlank())lastError="Transmissão terminada";reportState(false);cameraInset?.stop();cameraInset=null;audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();networkWorker.shutdownNow();super.onDestroy()}
+ override fun onDestroy(){if(lastError.isBlank())lastError="Transmissão terminada";reportState(false);cameraInset?.stop();cameraInset=null;stopMicrophone();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();networkWorker.shutdownNow();super.onDestroy()}
 }
