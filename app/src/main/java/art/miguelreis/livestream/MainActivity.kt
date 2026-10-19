@@ -23,6 +23,15 @@ class MainActivity : Activity() {
  private var session = ""
  private var publisherKey = ""
  private var sharedText = ""
+ private val connectionReceiver=object:BroadcastReceiver(){
+  override fun onReceive(context:Context?,intent:Intent?) {
+   if(session.isBlank())return
+   val ok=intent?.getBooleanExtra("connected",false)==true
+   val http=intent?.getIntExtra("http",0)?:0
+   val error=intent?.getStringExtra("error").orEmpty()
+   status.text=if(ok) "● EM DIRETO · ligação ativa" else "A tentar restabelecer ligação…"+if(http>0) " (HTTP $http)" else if(error.isNotBlank()) " ($error)" else ""
+  }
+ }
  private val endpoint get() = BuildConfig.RELAY_URL.trimEnd('/')
 
  private fun shareLink() = "$endpoint/watch/$session"
@@ -74,6 +83,8 @@ class MainActivity : Activity() {
 
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
+  val filter=IntentFilter("art.miguelreis.livestream.STATUS")
+  if(Build.VERSION.SDK_INT>=33)registerReceiver(connectionReceiver,filter,Context.RECEIVER_NOT_EXPORTED) else @Suppress("DEPRECATION") registerReceiver(connectionReceiver,filter)
   if(intent?.action==Intent.ACTION_SEND && intent.type=="text/plain") sharedText=intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().take(500)
   val root = LinearLayout(this).apply {
    orientation = LinearLayout.VERTICAL
@@ -115,6 +126,7 @@ class MainActivity : Activity() {
   setContentView(root)
  }
 
+ override fun onDestroy(){try{unregisterReceiver(connectionReceiver)}catch(_:Exception){};super.onDestroy()}
  @Deprecated("Legacy activity result")
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
   super.onActivityResult(requestCode, resultCode, data)
