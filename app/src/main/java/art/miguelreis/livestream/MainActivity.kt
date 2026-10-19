@@ -15,6 +15,8 @@ import java.util.UUID
 class MainActivity : Activity() {
  private val requestCode = 123
  private val microphoneRequestCode = 126
+ private val cameraRequestCode = 127
+ private lateinit var cameraMode:RadioGroup
  private lateinit var micCheck:CheckBox
  private val recordRequestCode = 125
  private lateinit var recordButton:Button
@@ -69,6 +71,10 @@ class MainActivity : Activity() {
  }
 
  private fun begin() {
+  if(cameraMode.checkedRadioButtonId!=3000 && checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){
+   requestPermissions(arrayOf(Manifest.permission.CAMERA),cameraRequestCode)
+   return
+  }
   if(micCheck.isChecked && checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
    requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),microphoneRequestCode)
    return
@@ -106,6 +112,7 @@ class MainActivity : Activity() {
   startButton.isEnabled = true
   saveLiveCheck.isEnabled=true
   micCheck.isEnabled=true
+  for(i in 0 until cameraMode.childCount)cameraMode.getChildAt(i).isEnabled=true
   for(i in 0 until captureMode.childCount)captureMode.getChildAt(i).isEnabled=Build.VERSION.SDK_INT>=34 || i==0
   recordButton.isEnabled=true
   stopRecordButton.isEnabled=false
@@ -169,6 +176,14 @@ class MainActivity : Activity() {
   card.addView(saveLiveCheck)
   micCheck=CheckBox(this).apply{text="Transmitir som do microfone";isChecked=false;setTextColor(Color.rgb(24,36,56))}
   card.addView(micCheck)
+  card.addView(label("CÂMARA NA TRANSMISSÃO (OPCIONAL)",12f,muted))
+  cameraMode=RadioGroup(this).apply{
+   orientation=RadioGroup.VERTICAL
+   addView(RadioButton(this@MainActivity).apply{id=3000;text="Desligada";isChecked=true;setTextColor(Color.rgb(24,36,56))})
+   addView(RadioButton(this@MainActivity).apply{id=3001;text="Câmara frontal";setTextColor(Color.rgb(24,36,56))})
+   addView(RadioButton(this@MainActivity).apply{id=3002;text="Câmara traseira";setTextColor(Color.rgb(24,36,56))})
+  }
+  card.addView(cameraMode)
   stopButton=Button(this).apply {
    text="■  Parar transmissão";textSize=15f;isAllCaps=false;isEnabled=false
    setOnClickListener {stopSharing()}
@@ -237,6 +252,10 @@ class MainActivity : Activity() {
 
  override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){
   super.onRequestPermissionsResult(requestCode,permissions,grantResults)
+  if(requestCode==cameraRequestCode){
+   if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED)begin()
+   else{cameraMode.check(3000);Toast.makeText(this,"Câmara desativada",Toast.LENGTH_SHORT).show();begin()}
+  }
   if(requestCode==microphoneRequestCode){
    if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED)begin()
    else{micCheck.isChecked=false;Toast.makeText(this,"Microfone desativado",Toast.LENGTH_SHORT).show();begin()}
@@ -266,11 +285,13 @@ class MainActivity : Activity() {
     putExtra("sharedText",sharedText)
     putExtra("saveAlongside",saveLiveCheck.isChecked)
     putExtra("micEnabled",micCheck.isChecked)
+    putExtra("cameraMode",when(cameraMode.checkedRadioButtonId){3001->1;3002->2;else->0})
    })
    status.text = if(saveLiveCheck.isChecked) "A transmitir e gravar · a estabelecer ligação" else "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
    saveLiveCheck.isEnabled=false
    micCheck.isEnabled=false
+   for(i in 0 until cameraMode.childCount)cameraMode.getChildAt(i).isEnabled=false
    captureMode.isEnabled=false
    for(i in 0 until captureMode.childCount)captureMode.getChildAt(i).isEnabled=false
    recordButton.isEnabled=false
