@@ -89,7 +89,7 @@ class CaptureService: Service() {
   reader?.setOnImageAvailableListener({ r ->
    val image=try{r.acquireLatestImage()}catch(_:Exception){null}?:return@setOnImageAvailableListener
    val now=SystemClock.elapsedRealtime()
-   if(now-lastFrameAt<intervalMs || !busy.compareAndSet(false,true) || uploadBusy.get()){
+   if(now-lastFrameAt<intervalMs || uploadBusy.get() || !busy.compareAndSet(false,true)){
     image.close()
     return@setOnImageAvailableListener
    }
@@ -177,6 +177,7 @@ class CaptureService: Service() {
   try{display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)}catch(e:Exception){lastError="Não foi possível iniciar o ecrã: "+e.javaClass.simpleName;reportState(false);stopSelf();return START_NOT_STICKY}
   if(micEnabled)startMicrophone()
   if(cameraMode!=0){try{cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start()){cameraInset=null;lastError="Câmara indisponível"}}}catch(_:Exception){cameraInset=null;lastError="Câmara não disponível"}}
+  reportState(false)
   return START_NOT_STICKY
  }
   private fun startMicrophone(){
