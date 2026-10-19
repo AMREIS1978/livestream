@@ -34,6 +34,7 @@ class CaptureService: Service() {
  @Volatile private var cameraMode=0
  private var cameraInset:CameraInset?=null
  private var presenterOverlay:PresenterOverlay?=null
+ private var overlayEnabled=false
  private fun setCamera(next:Int){
   if(next==cameraMode)return
   cameraInset?.stop();cameraInset=null;cameraMode=next
@@ -84,13 +85,15 @@ class CaptureService: Service() {
    if(nextCamera!=cameraMode)setCamera(nextCamera)
    configureCamera()
    if(nextMic!=micEnabled){micEnabled=nextMic;if(micEnabled && checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startMicrophone() else stopMicrophone()}
-   if(intent.getBooleanExtra("showOverlay",false))showPresenterOverlay()
+   if(intent.hasExtra("overlayEnabled"))overlayEnabled=intent.getBooleanExtra("overlayEnabled",overlayEnabled)
+   if(intent.getBooleanExtra("showOverlay",false) && overlayEnabled)showPresenterOverlay()
    if(intent.getBooleanExtra("hideOverlay",false))presenterOverlay?.hide()
    return START_NOT_STICKY
   }
   if(projection!=null)return START_NOT_STICKY
   endpoint=intent?.getStringExtra("endpoint")?:"";session=intent?.getStringExtra("session")?:"";publisherKey=intent?.getStringExtra("publisherKey")?:"";sharedText=intent?.getStringExtra("sharedText")?:"";saveAlongside=intent?.getBooleanExtra("saveAlongside",false)==true;micEnabled=intent?.getBooleanExtra("micEnabled",false)==true && checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED
   cameraMode=intent?.getIntExtra("cameraMode",0)?:0
+  overlayEnabled=intent?.getBooleanExtra("overlayEnabled",false)==true
   val channel=NotificationChannel("capture","Partilha de ecrã",NotificationManager.IMPORTANCE_LOW)
   (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
   val stop=PendingIntent.getService(this,0,Intent(this,CaptureService::class.java).apply{action="STOP"},PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -202,7 +205,7 @@ class CaptureService: Service() {
   if(micEnabled)startMicrophone()
   if(cameraMode!=0){try{cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start()){cameraInset=null;lastError="Câmara indisponível"}}}catch(_:Exception){cameraInset=null;lastError="Câmara não disponível"}}
   configureCamera()
-  if(cameraMode!=0)showPresenterOverlay()
+  if(cameraMode!=0 && overlayEnabled)showPresenterOverlay()
   reportState(false)
   return START_NOT_STICKY
  }
