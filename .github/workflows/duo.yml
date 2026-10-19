@@ -1,4 +1,4 @@
-name: LiveStream 1.8 - APK com cameras e GPS
+name: LiveStream Duo 1.8.1 - APK com cameras e GPS
 on:
   push:
     branches: [main]
@@ -30,14 +30,14 @@ jobs:
       - name: Compilar APK
         run: gradle :app:assembleDebug --no-daemon
       - name: Nome do ficheiro
-        run: cp app/build/outputs/apk/debug/app-debug.apk LiveStream-1.8-cameras-GPS.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk LiveStream-Duo-1.8.1.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: LiveStream-1.8-cameras-GPS
-          path: LiveStream-1.8-cameras-GPS.apk
+          name: LiveStream-Duo-1.8.1
+          path: LiveStream-Duo-1.8.1.apk
       - name: Publicar download
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="duo-1.8-${GITHUB_RUN_NUMBER}"
-          gh release create "$TAG" LiveStream-1.8-cameras-GPS.apk --title "LiveStream 1.8 — câmaras e localização" --notes "APK de teste. Mantém a partilha de ecrã e acrescenta Câmaras + localização. Duas câmaras simultâneas dependem do equipamento. Este modo deve ficar aberto no ecrã. Assinatura de teste: uma instalação anterior pode exigir desinstalação se usar outra chave."
+          TAG="duo-1.8.1-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" LiveStream-Duo-1.8.1.apk --title "LiveStream Duo 1.8.1 — câmaras e localização" --notes "APK de teste. Mantém a partilha de ecrã e acrescenta Câmaras + localização. Duas câmaras simultâneas dependem do equipamento. Este modo deve ficar aberto no ecrã. Assinatura de teste: uma instalação anterior pode exigir desinstalação se usar outra chave."
