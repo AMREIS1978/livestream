@@ -12,6 +12,7 @@ import android.os.*
 import android.graphics.Color
 import android.provider.Settings
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.LinearLayout
@@ -73,8 +74,20 @@ class CaptureService: Service() {
      try {startActivity(Intent.createChooser(share,"Enviar link").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}catch(_:Exception){}
     } }
     liveLabel=live
-    panel.addView(live);panel.addView(send)
+    val stopButton=Button(this).apply {text="■";textSize=12f;setOnClickListener{stopSelf()}}
+    val handle=TextView(this).apply{text="⋮⋮";textSize=20f;setTextColor(Color.WHITE);setPadding(10,10,10,10)}
+    panel.addView(handle);panel.addView(live);panel.addView(send);panel.addView(stopButton)
     val params=WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply { gravity=Gravity.TOP or Gravity.END;x=8;y=80 }
+    handle.setOnTouchListener(object:android.view.View.OnTouchListener{
+     var startX=0;var startY=0;var downX=0f;var downY=0f
+     override fun onTouch(v:android.view.View,event:MotionEvent):Boolean{
+      when(event.actionMasked){
+       MotionEvent.ACTION_DOWN->{startX=params.x;startY=params.y;downX=event.rawX;downY=event.rawY;return true}
+       MotionEvent.ACTION_MOVE->{params.x=(startX-(event.rawX-downX).toInt()).coerceAtLeast(0);params.y=(startY+(event.rawY-downY).toInt()).coerceAtLeast(0);try{overlayManager?.updateViewLayout(panel,params)}catch(_:Exception){};return true}
+      }
+      return true
+     }
+    })
     overlayManager?.addView(panel,params);overlayView=panel
    }catch(_:Exception) { overlayView=null }
   }
