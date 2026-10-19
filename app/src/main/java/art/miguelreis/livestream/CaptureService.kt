@@ -213,7 +213,7 @@ class CaptureService: Service() {
    if(cameraMode==0 || !Settings.canDrawOverlays(this))return
    if(presenterOverlay==null)presenterOverlay=PresenterOverlay(this,{cameraInset},{micEnabled},{
     if(micEnabled){micEnabled=false;stopMicrophone()}else if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){micEnabled=true;startMicrophone()}
-   },{setCamera(if(cameraMode==1)2 else 1)},{setCamera(0)},{x,y,size->cameraX=x;cameraY=y;cameraSize=size;configureCamera()})
+   },{setCamera(if(cameraMode==1)2 else 1)},{setCamera(0)},{stopSelf()},{x,y,size->cameraX=x;cameraY=y;cameraSize=size;configureCamera()})
    presenterOverlay?.show()
   }
   private fun stopMicrophone(){audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();audioThread=null}
