@@ -26,7 +26,8 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: cloudflare
-          command: deploy
+          wranglerVersion: "4.151.1"
+          command: deploy --config cloudflare/wrangler.jsonc
   build:
     needs: deploy
     runs-on: ubuntu-24.04
