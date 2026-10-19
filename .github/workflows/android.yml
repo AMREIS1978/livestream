@@ -54,7 +54,7 @@ jobs:
           DEPLOYED_URL: ${{ needs.deploy.outputs.relay_url }}
           EXISTING_URL: ${{ vars.LIVESTREAM_SERVER_URL }}
         run: |
-          URL="${DEPLOYED_URL:-$EXISTING_URL}"
+          URL="${DEPLOYED_URL:-${EXISTING_URL:-https://livestremanew.a-miguel-reis.workers.dev}}"
           URL="${URL%/}"
           if [[ "$URL" != https://* ]]; then
             echo "::error::No public HTTPS relay configured. Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets, or LIVESTREAM_SERVER_URL repository variable."
