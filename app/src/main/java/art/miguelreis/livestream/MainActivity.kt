@@ -52,6 +52,8 @@ class MainActivity : Activity() {
  private lateinit var captureMode:RadioGroup
  private var shareEntireScreen=true
  private var live=false
+ private var pendingStart=false
+ private var awaitingOverlay=false
  private fun updateLiveControls(){
   if(!live)return
   cameraPreview.stop();cameraPreview.visibility=android.view.View.GONE
@@ -96,16 +98,18 @@ class MainActivity : Activity() {
  }
 
  private fun begin() {
+  pendingStart=true
   if(cameraMode.checkedRadioButtonId!=3000 && overlayPrefs.getBoolean("allowOverlay",false) && !Settings.canDrawOverlays(this)){
    AlertDialog.Builder(this).setTitle("Autorizar a janela do apresentador")
     .setMessage("Escolheu mostrar a câmara sobre outras aplicações. O Android precisa de autorizar esta função. Pode continuar sem a janela.")
-    .setPositiveButton("Autorizar"){_,_->requestOverlayPermission()}
-    .setNegativeButton("Continuar sem sobreposição"){_,_->beginWithoutOverlay()}.show()
+    .setPositiveButton("Autorizar"){_,_->awaitingOverlay=true;requestOverlayPermission()}
+    .setNegativeButton("Continuar sem sobreposição"){_,_->pendingStart=false;beginWithoutOverlay()}.show()
    return
   }
   beginWithoutOverlay()
  }
  private fun beginWithoutOverlay(){
+  pendingStart=true
   if(cameraMode.checkedRadioButtonId!=3000 && checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){
    requestPermissions(arrayOf(Manifest.permission.CAMERA),cameraRequestCode)
    return
@@ -115,6 +119,7 @@ class MainActivity : Activity() {
    return
   }
   if (!endpoint.startsWith("https://")) {
+   pendingStart=false
    status.text = "Ligação ainda não configurada"
    AlertDialog.Builder(this)
     .setTitle("Falta ativar a ligação")
@@ -122,6 +127,7 @@ class MainActivity : Activity() {
     .setPositiveButton("OK", null).show()
    return
   }
+  pendingStart=false
   session = UUID.randomUUID().toString()
   publisherKey = UUID.randomUUID().toString() + UUID.randomUUID().toString()
   cameraPreview.stop()
@@ -216,9 +222,9 @@ class MainActivity : Activity() {
   micCheck.setOnCheckedChangeListener { _,checked ->
    if(checked && checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),microphoneRequestCode)}else updateLiveControls()
   }
-  root.addView(micCheck,1)
+  root.addView(micCheck)
   val cameraHero=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=rounded(cardColor);setPadding(dp(14),dp(12),dp(14),dp(14))}
-  root.addView(cameraHero,1)
+  root.addView(cameraHero)
   cameraHero.addView(label("A SUA IMAGEM · CÂMARA",17f,accent).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
   cameraHero.addView(label("Mostre o rosto enquanto explica o ecrã. Pode alterar a câmara a qualquer momento.",12f,muted))
   cameraMode=RadioGroup(this).apply{
@@ -232,10 +238,10 @@ class MainActivity : Activity() {
   cameraHero.addView(previewLabel)
   cameraHero.addView(label("Pré-visualização antes de transmitir; durante a transmissão, a imagem é incorporada no vídeo.",12f,muted))
   cameraPreview=CameraPreview(this).apply{visibility=android.view.View.GONE}
-  cameraHero.addView(cameraPreview,LinearLayout.LayoutParams(-1,dp(270)))
-  cameraHero.addView(label("POSIÇÃO DA CÂMARA · ARRASTE O QUADRO AZUL",12f,muted))
+  cameraHero.addView(cameraPreview,LinearLayout.LayoutParams(-1,dp(180)))
+  cameraHero.addView(label("Posição da câmara (opcional)",12f,muted))
   placement=CameraPlacementView(this)
-  cameraHero.addView(placement,LinearLayout.LayoutParams(-1,dp(200)))
+  cameraHero.addView(placement,LinearLayout.LayoutParams(-1,dp(130)))
   placement.onPlacementChanged={updateLiveControls()}
   cameraHero.addView(label("TAMANHO DA CÂMARA",12f,muted))
   cameraSizeSeek=SeekBar(this).apply{max=100;progress=33;setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
@@ -281,6 +287,7 @@ class MainActivity : Activity() {
    setPadding(dp(18),dp(18),dp(18),dp(18))
   }
   root.addView(recordCard,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(24)})
+  recordCard.visibility=android.view.View.GONE
   recordCard.addView(label("Gravar ecrã",21f).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
   recordCard.addView(label("Guarda um vídeo MP4 no telemóvel, sem ligação à internet e sem custos. Sem áudio nesta versão.",13f,muted).apply{setPadding(0,dp(8),0,dp(10))})
   recordButton=Button(this).apply{
@@ -298,6 +305,7 @@ class MainActivity : Activity() {
    setPadding(dp(18),dp(18),dp(18),dp(18))
   }
   root.addView(contentCard,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(24)})
+  contentCard.visibility=android.view.View.GONE
   contentCard.addView(label("Vê isto 👀",21f).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
   contentCard.addView(label("Partilha o link original de um vídeo, canal ou página. O destinatário abre-o na aplicação ou site oficial.",13f,muted).apply{setPadding(0,dp(8),0,dp(10))})
   contentInput=EditText(this).apply{
@@ -316,6 +324,7 @@ class MainActivity : Activity() {
    setPadding(dp(18),dp(18),dp(18),dp(18))
   }
   root.addView(hint,LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(26)})
+  hint.visibility=android.view.View.GONE
   hint.addView(label("COMO FUNCIONA",12f,accent).apply {setPadding(0,0,0,dp(10))})
   hint.addView(label("1  Escolhe partilhar o ecrã ou um link.\\n2  Autoriza a captura, se necessário.\\n3  Envia o convite.\\n4  Continua a utilizar o telemóvel.",14f))
   if(sharedText.isNotBlank())hint.addView(label("\\nRecebemos um conteúdo de outra aplicação. Podes iniciar a partilha agora.",13f,muted))
@@ -327,7 +336,7 @@ class MainActivity : Activity() {
   }}
   root.addView(overlayOption)
   setContentView(scroll)
-  scroll.post{askOverlayPreference()}
+  // Do not interrupt screen sharing with a permissions dialog at app launch.
  }
 
  override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){
@@ -336,10 +345,12 @@ class MainActivity : Activity() {
    if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED){
     if(cameraMode.checkedRadioButtonId!=3000){if(live)updateLiveControls() else{cameraPreview.visibility=android.view.View.VISIBLE;cameraPreview.showCamera(cameraMode.checkedRadioButtonId==3001)}}
    }else{cameraMode.check(3000);Toast.makeText(this,"Câmara desativada",Toast.LENGTH_SHORT).show()}
+   if(pendingStart)beginWithoutOverlay()
+   return
   }
   if(requestCode==microphoneRequestCode){
-   if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED)begin()
-   else{micCheck.isChecked=false;Toast.makeText(this,"Microfone desativado",Toast.LENGTH_SHORT).show();begin()}
+   if(grantResults.firstOrNull()!=PackageManager.PERMISSION_GRANTED){micCheck.isChecked=false;Toast.makeText(this,"Microfone desativado",Toast.LENGTH_SHORT).show()}
+   if(pendingStart)beginWithoutOverlay()
   }
  }
  override fun onDestroy(){cameraPreview.release();try{unregisterReceiver(connectionReceiver)}catch(_:Exception){};super.onDestroy()}
@@ -348,6 +359,7 @@ class MainActivity : Activity() {
   super.onActivityResult(requestCode, resultCode, data)
   if(requestCode==overlayRequestCode){
    Toast.makeText(this,if(Settings.canDrawOverlays(this))"Janela do apresentador autorizada" else "Sobreposição não autorizada",Toast.LENGTH_SHORT).show()
+   if(awaitingOverlay && pendingStart){awaitingOverlay=false;beginWithoutOverlay()}
    return
   }
   if(requestCode==recordRequestCode){
@@ -386,7 +398,7 @@ class MainActivity : Activity() {
    stopRecordButton.isEnabled=false
    stopButton.isEnabled = true
    inviteAction.isEnabled=true;copyAction.isEnabled=true
-   sendInvite()
+   Toast.makeText(this,"Transmissão iniciada. Use Enviar convite para partilhar o link.",Toast.LENGTH_LONG).show()
   } else {
    session = ""
    publisherKey = ""
