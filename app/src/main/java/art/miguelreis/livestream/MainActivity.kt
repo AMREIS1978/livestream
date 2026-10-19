@@ -23,6 +23,16 @@ class MainActivity : Activity() {
  private var session = ""
  private var publisherKey = ""
  private var sharedText = ""
+ private lateinit var contentInput:EditText
+ private fun shareContent(){
+  val raw=contentInput.text.toString().trim()
+  if(raw.isBlank()){Toast.makeText(this,"Cole primeiro o link do conteúdo",Toast.LENGTH_SHORT).show();return}
+  val match=Regex("https?://[^\\s]+").find(raw)
+  if(match==null){Toast.makeText(this,"Insira um endereço https:// válido",Toast.LENGTH_SHORT).show();return}
+  val url=match.value
+  val send=Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,"Vê isto 👀\\n$url")}
+  startActivity(Intent.createChooser(send,"Partilhar conteúdo"))
+ }
  private val connectionReceiver=object:BroadcastReceiver(){
   override fun onReceive(context:Context?,intent:Intent?) {
    if(session.isBlank())return
@@ -86,15 +96,15 @@ class MainActivity : Activity() {
   val filter=IntentFilter("art.miguelreis.livestream.STATUS")
   if(Build.VERSION.SDK_INT>=33)registerReceiver(connectionReceiver,filter,Context.RECEIVER_NOT_EXPORTED) else { @Suppress("DEPRECATION") registerReceiver(connectionReceiver,filter) }
   if(intent?.action==Intent.ACTION_SEND && intent.type=="text/plain") sharedText=intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().take(500)
-  val navy=Color.rgb(10,17,31)
-  val cardColor=Color.rgb(24,35,56)
-  val muted=Color.rgb(164,180,205)
-  val accent=Color.rgb(57,196,161)
+  val navy=Color.rgb(246,248,252)
+  val cardColor=Color.WHITE
+  val muted=Color.rgb(91,105,126)
+  val accent=Color.rgb(24,119,242)
   fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
   fun rounded(color:Int,radius:Int=18)=android.graphics.drawable.GradientDrawable().apply {
    setColor(color);cornerRadius=dp(radius).toFloat()
   }
-  fun label(value:String,size:Float,color:Int=Color.WHITE)=TextView(this).apply {
+  fun label(value:String,size:Float,color:Int=Color.rgb(24,36,56))=TextView(this).apply {
    text=value;textSize=size;setTextColor(color)
   }
   val scroll=ScrollView(this).apply {fillViewport=true;setBackgroundColor(navy)}
@@ -102,8 +112,8 @@ class MainActivity : Activity() {
    orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(32),dp(22),dp(24))
   }
   scroll.addView(root)
-  root.addView(label("●  LIVESTREAM",13f,accent))
-  val title=label("Mostra o que estás a ver.",30f).apply {
+  root.addView(label("●  LiveStream",16f,accent).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
+  val title=label("Vê isto. Em direto.",29f).apply {
    setTypeface(null,android.graphics.Typeface.BOLD);setPadding(0,dp(16),0,dp(10))
   }
   root.addView(title)
@@ -117,8 +127,8 @@ class MainActivity : Activity() {
   status=label("●  Pronto para começar",17f,accent).apply {setPadding(0,0,0,dp(18))}
   card.addView(status)
   startButton=Button(this).apply {
-   text="▶  COMEÇAR A PARTILHAR";textSize=16f;isAllCaps=false
-   setTextColor(navy);background=rounded(accent,14)
+   text="▶  Partilhar o meu ecrã";textSize=16f;isAllCaps=false
+   setTextColor(Color.WHITE);background=rounded(accent,14)
    setOnClickListener {begin()}
   }
   card.addView(startButton,LinearLayout.LayoutParams(-1,dp(58)))
@@ -141,13 +151,31 @@ class MainActivity : Activity() {
   actions.addView(inviteButton,LinearLayout.LayoutParams(0,dp(54),1f))
   actions.addView(copyButton,LinearLayout.LayoutParams(0,dp(54),1f).apply {marginStart=dp(8)})
   inviteAction=inviteButton;copyAction=copyButton
+  val contentCard=LinearLayout(this).apply {
+   orientation=LinearLayout.VERTICAL;background=rounded(cardColor)
+   setPadding(dp(18),dp(18),dp(18),dp(18))
+  }
+  root.addView(contentCard,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(24)})
+  contentCard.addView(label("Vê isto 👀",21f).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
+  contentCard.addView(label("Partilha o link original de um vídeo, canal ou página. O destinatário abre-o na aplicação ou site oficial.",13f,muted).apply{setPadding(0,dp(8),0,dp(10))})
+  contentInput=EditText(this).apply{
+   hint="Colar link do conteúdo";textSize=15f;setSingleLine(true)
+   inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+   setTextColor(Color.rgb(24,36,56));setHintTextColor(muted)
+   setText(Regex("https?://[^\\\\s]+").find(sharedText)?.value.orEmpty())
+  }
+  contentCard.addView(contentInput)
+  contentCard.addView(Button(this).apply{
+   text="↗  Enviar «Vê isto»";isAllCaps=false
+   setOnClickListener{shareContent()}
+  },LinearLayout.LayoutParams(-1,dp(52)))
   val hint=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL;background=rounded(cardColor)
    setPadding(dp(18),dp(18),dp(18),dp(18))
   }
   root.addView(hint,LinearLayout.LayoutParams(-1,-2).apply {topMargin=dp(26)})
   hint.addView(label("COMO FUNCIONA",12f,accent).apply {setPadding(0,0,0,dp(10))})
-  hint.addView(label("1  Toca em Começar a partilhar.\\n2  Autoriza a captura do Android.\\n3  Envia o link pelo WhatsApp.\\n4  Continua a usar o telemóvel normalmente.",14f))
+  hint.addView(label("1  Escolhe partilhar o ecrã ou um link.\\n2  Autoriza a captura, se necessário.\\n3  Envia o convite.\\n4  Continua a utilizar o telemóvel.",14f))
   if(sharedText.isNotBlank())hint.addView(label("\\nRecebemos um conteúdo de outra aplicação. Podes iniciar a partilha agora.",13f,muted))
   root.addView(label("O indicador EM DIRETO aparece sobre outras aplicações, se autorizado. Vídeos protegidos, como alguns canais de TV, podem surgir a preto. Esta versão não transmite áudio.",12f,muted).apply {setPadding(0,dp(22),0,dp(8))})
   setContentView(scroll)
