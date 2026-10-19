@@ -90,6 +90,9 @@ class CameraInset(private val context:Context, private val front:Boolean) {
   }catch(_:Exception){stop();return false}
  }
 
+ fun drawPreview(canvas:Canvas,width:Int,height:Int){
+  synchronized(frameLock){val frame=latest.get()?:return;try{if(!frame.isRecycled)canvas.drawBitmap(frame,null,Rect(0,0,width,height),Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))}catch(_:Exception){}}
+ }
  fun drawOn(target:Bitmap) {
   synchronized(frameLock){
   val inset=latest.get()?:return
