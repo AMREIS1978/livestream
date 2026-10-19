@@ -37,6 +37,8 @@ class CaptureService: Service() {
  private var reader:ImageReader?=null
  private var display:android.hardware.display.VirtualDisplay?=null
  private val worker=Executors.newSingleThreadExecutor()
+ private val networkWorker=Executors.newSingleThreadExecutor()
+ private val uploadBusy=AtomicBoolean(false)
  private val busy=AtomicBoolean(false)
  private var endpoint="";private var session="";private var publisherKey=""
  private var lastFrameAt=0L
@@ -85,7 +87,7 @@ class CaptureService: Service() {
   reader?.setOnImageAvailableListener({ r ->
    val image=try{r.acquireLatestImage()}catch(_:Exception){null}?:return@setOnImageAvailableListener
    val now=SystemClock.elapsedRealtime()
-   if(now-lastFrameAt<intervalMs || !busy.compareAndSet(false,true)){
+   if(now-lastFrameAt<intervalMs || !busy.compareAndSet(false,true) || uploadBusy.get()){
     image.close()
     return@setOnImageAvailableListener
    }
@@ -113,37 +115,47 @@ class CaptureService: Service() {
         if(bytes.size<100 || bytes.size>690000){
          lastError="Imagem demasiado grande";reportState(false)
         }else{
-         var delivered=false
-         val started=SystemClock.elapsedRealtime()
-         for(attempt in 0..1){
-          var conn:HttpURLConnection?=null
+         if(uploadBusy.compareAndSet(false,true)){
           try{
-           conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
-           conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=1800;conn.readTimeout=1800
-           conn.setRequestProperty("Content-Type","image/jpeg")
-           conn.setRequestProperty("X-Publish-Key",publisherKey)
-           conn.outputStream.use{it.write(bytes)}
-           val code=conn.responseCode
-           lastHttpStatus=code
-           if(code in 200..299){delivered=true;lastError="";break}
-           lastError="HTTP $code"
-           if(code in 400..499 && code!=429)break
-          }catch(e:Exception){lastError=e.javaClass.simpleName}
-          finally{conn?.disconnect()}
-          if(attempt==0)Thread.sleep(80)
+           networkWorker.execute {
+            try{
+          var delivered=false
+          val started=SystemClock.elapsedRealtime()
+          for(attempt in 0..1){
+           var conn:HttpURLConnection?=null
+           try{
+            conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
+            conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=1800;conn.readTimeout=1800
+            conn.setRequestProperty("Content-Type","image/jpeg")
+            conn.setRequestProperty("X-Publish-Key",publisherKey)
+            conn.outputStream.use{it.write(bytes)}
+            val code=conn.responseCode
+            lastHttpStatus=code
+            if(code in 200..299){delivered=true;lastError="";break}
+            lastError="HTTP $code"
+            if(code in 400..499 && code!=429)break
+           }catch(e:Exception){lastError=e.javaClass.simpleName}
+           finally{conn?.disconnect()}
+           if(attempt==0)Thread.sleep(80)
+          }
+          val duration=SystemClock.elapsedRealtime()-started
+          lastUploadMs=duration
+          failures=if(delivered)0 else (failures+1).coerceAtMost(100)
+          if(delivered && duration<350){
+           jpegQuality=(jpegQuality+2).coerceAtMost(78);intervalMs=170L
+          }else if(delivered && duration<800){
+           jpegQuality=jpegQuality.coerceAtMost(68);intervalMs=240L
+          }else{
+           jpegQuality=(jpegQuality-8).coerceAtLeast(30)
+           intervalMs=if(failures>2)850L else 480L
+          }
+          reportState(delivered)
+            }catch(_:Exception){lastError="Falha de envio";reportState(false)}
+            finally{uploadBusy.set(false)}
+           }
+          }catch(_:java.util.concurrent.RejectedExecutionException){uploadBusy.set(false)}
          }
-         val duration=SystemClock.elapsedRealtime()-started
-         lastUploadMs=duration
-         failures=if(delivered)0 else (failures+1).coerceAtMost(100)
-         if(delivered && duration<350){
-          jpegQuality=(jpegQuality+2).coerceAtMost(78);intervalMs=170L
-         }else if(delivered && duration<800){
-          jpegQuality=jpegQuality.coerceAtMost(68);intervalMs=240L
-         }else{
-          jpegQuality=(jpegQuality-8).coerceAtLeast(30)
-          intervalMs=if(failures>2)850L else 480L
-         }
-         reportState(delivered)
+
         }
        }finally{cropped.recycle()}
       }finally{source.recycle()}
@@ -192,5 +204,5 @@ class CaptureService: Service() {
    },"LiveStreamAudio").apply{isDaemon=true;start()}
   }catch(_:Exception){audioRunning=false}
  }
- override fun onDestroy(){audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();super.onDestroy()}
+ override fun onDestroy(){audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();networkWorker.shutdownNow();super.onDestroy()}
 }
