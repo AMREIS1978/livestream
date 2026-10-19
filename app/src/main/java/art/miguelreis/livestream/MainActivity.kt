@@ -28,7 +28,7 @@ class MainActivity : Activity() {
    .setNegativeButton("Não"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",false).apply()}.show()
  }
  private fun requestOverlayPermission(){
-  if(!Settings.canDrawOverlays(this))startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")),overlayRequestCode)
+  if(!Settings.canDrawOverlays(this@MainActivity))startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")),overlayRequestCode)
  }
  private lateinit var cameraMode:RadioGroup
  private lateinit var cameraPreview:CameraPreview
