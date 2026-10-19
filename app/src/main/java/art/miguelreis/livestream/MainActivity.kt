@@ -169,15 +169,15 @@ class MainActivity : Activity() {
   val filter=IntentFilter("art.miguelreis.livestream.STATUS")
   if(Build.VERSION.SDK_INT>=33)registerReceiver(connectionReceiver,filter,Context.RECEIVER_NOT_EXPORTED) else { @Suppress("DEPRECATION") registerReceiver(connectionReceiver,filter) }
   if(intent?.action==Intent.ACTION_SEND && intent.type=="text/plain") sharedText=intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().take(500)
-  val navy=Color.rgb(246,248,252)
-  val cardColor=Color.WHITE
-  val muted=Color.rgb(91,105,126)
-  val accent=Color.rgb(24,119,242)
+  val navy=Color.rgb(8,11,20)
+  val cardColor=Color.rgb(23,27,40)
+  val muted=Color.rgb(157,164,184)
+  val accent=Color.rgb(255,26,91)
   fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
   fun rounded(color:Int,radius:Int=18)=android.graphics.drawable.GradientDrawable().apply {
    setColor(color);cornerRadius=dp(radius).toFloat()
   }
-  fun label(value:String,size:Float,color:Int=Color.rgb(24,36,56))=TextView(this).apply {
+  fun label(value:String,size:Float,color:Int=Color.WHITE)=TextView(this).apply {
    text=value;textSize=size;setTextColor(color)
   }
   val scroll=ScrollView(this).apply {isFillViewport=true;setBackgroundColor(navy)}
@@ -185,12 +185,12 @@ class MainActivity : Activity() {
    orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(32),dp(22),dp(24))
   }
   scroll.addView(root)
-  root.addView(label("●  LiveStream",16f,accent).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
-  val title=label("Vê isto. Em direto.",29f).apply {
+  root.addView(label("●  LiveStream",18f,accent).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
+  val title=label("O teu ecrã. Em direto.",29f).apply {
    setTypeface(null,android.graphics.Typeface.BOLD);setPadding(0,dp(16),0,dp(10))
   }
   root.addView(title)
-  root.addView(label("Partilhe o ecrã e explique com a sua imagem e voz. Arraste a janela vertical do apresentador enquanto utiliza outras aplicações.",15f,muted).apply {setPadding(0,0,0,dp(12))})
+  root.addView(label("Mostra, explica e partilha. Tudo num só link.",15f,muted).apply {setPadding(0,0,0,dp(12))})
   val card=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL;background=rounded(cardColor)
    setPadding(dp(20),dp(20),dp(20),dp(20))
@@ -200,33 +200,34 @@ class MainActivity : Activity() {
   status=label("●  Pronto para começar",17f,accent).apply {setPadding(0,0,0,dp(18))}
   card.addView(status)
   startButton=Button(this).apply {
-   text="▶  Partilhar o meu ecrã";textSize=16f;isAllCaps=false
+   text="▶  Iniciar transmissão";textSize=16f;isAllCaps=false
    setTextColor(Color.WHITE);background=rounded(accent,14)
    setOnClickListener {begin()}
   }
   captureMode=RadioGroup(this).apply{
    orientation=RadioGroup.VERTICAL
-   addView(RadioButton(this@MainActivity).apply{id=2001;text="Todo o telemóvel";isChecked=true;setTextColor(Color.rgb(24,36,56))})
-   addView(RadioButton(this@MainActivity).apply{id=2002;text="Apenas uma aplicação";setTextColor(Color.rgb(24,36,56))})
+   addView(RadioButton(this@MainActivity).apply{id=2001;text="Ecrã completo";isChecked=true;setTextColor(Color.WHITE)})
+   addView(RadioButton(this@MainActivity).apply{id=2002;text="Uma aplicação";setTextColor(Color.WHITE)})
   }
-  card.addView(label("O QUE QUER PARTILHAR?",12f,muted).apply{setPadding(0,0,0,dp(6))})
+  card.addView(label("PARTILHAR",12f,muted).apply{setPadding(0,0,0,dp(6))})
   card.addView(captureMode)
   if(Build.VERSION.SDK_INT<34){
    captureMode.findViewById<RadioButton>(2002).isEnabled=false
    card.addView(label("A seleção de uma única aplicação requer Android 14 ou superior.",12f,muted))
   }
   card.addView(startButton,LinearLayout.LayoutParams(-1,dp(58)))
-  saveLiveCheck=CheckBox(this).apply{text="Gravar também esta transmissão (MP4)";isChecked=false;setTextColor(Color.rgb(24,36,56))}
+  saveLiveCheck=CheckBox(this).apply{text="Guardar gravação MP4";isChecked=false;setTextColor(Color.WHITE)}
   card.addView(saveLiveCheck)
-  micCheck=CheckBox(this).apply{text="Transmitir som do microfone";isChecked=false;setTextColor(Color.rgb(24,36,56))}
+  saveLiveCheck.visibility=android.view.View.GONE
+  micCheck=CheckBox(this).apply{text="Microfone";isChecked=false;setTextColor(Color.rgb(24,36,56))}
   micCheck.setOnCheckedChangeListener { _,checked ->
    if(checked && checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),microphoneRequestCode)}else updateLiveControls()
   }
   root.addView(micCheck)
   val cameraHero=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=rounded(cardColor);setPadding(dp(14),dp(12),dp(14),dp(14))}
   root.addView(cameraHero)
-  cameraHero.addView(label("A SUA IMAGEM · CÂMARA",17f,accent).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
-  cameraHero.addView(label("Mostre o rosto enquanto explica o ecrã. Pode alterar a câmara a qualquer momento.",12f,muted))
+  cameraHero.addView(label("A tua imagem",19f,accent).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
+  cameraHero.addView(label("Câmara opcional · podes alterar durante a transmissão.",12f,muted))
   cameraMode=RadioGroup(this).apply{
    orientation=RadioGroup.VERTICAL
    addView(RadioButton(this@MainActivity).apply{id=3000;text="Desligada";isChecked=true;setTextColor(Color.rgb(24,36,56))})
@@ -236,12 +237,13 @@ class MainActivity : Activity() {
   cameraHero.addView(cameraMode)
   previewLabel=label("Pré-visualização da câmara (apenas nesta página)",12f,muted)
   cameraHero.addView(previewLabel)
-  cameraHero.addView(label("Pré-visualização antes de transmitir; durante a transmissão, a imagem é incorporada no vídeo.",12f,muted))
+
   cameraPreview=CameraPreview(this).apply{visibility=android.view.View.GONE}
   cameraHero.addView(cameraPreview,LinearLayout.LayoutParams(-1,dp(180)))
   cameraHero.addView(label("Posição da câmara (opcional)",12f,muted))
   placement=CameraPlacementView(this)
   cameraHero.addView(placement,LinearLayout.LayoutParams(-1,dp(130)))
+  placement.visibility=android.view.View.GONE
   placement.onPlacementChanged={updateLiveControls()}
   cameraHero.addView(label("TAMANHO DA CÂMARA",12f,muted))
   cameraSizeSeek=SeekBar(this).apply{max=100;progress=33;setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
@@ -250,6 +252,7 @@ class MainActivity : Activity() {
    override fun onStopTrackingTouch(seekBar:SeekBar?){}
   })}
   cameraHero.addView(cameraSizeSeek)
+  cameraSizeSeek.visibility=android.view.View.GONE
   cameraMode.setOnCheckedChangeListener { _,selected ->
    if(live){
     if(selected!=3000 && checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.CAMERA),cameraRequestCode)}else updateLiveControls()
@@ -268,7 +271,7 @@ class MainActivity : Activity() {
    setOnClickListener {stopSharing()}
   }
   card.addView(stopButton,LinearLayout.LayoutParams(-1,dp(54)).apply {topMargin=dp(12)})
-  root.addView(label("CONVIDAR ALGUÉM",12f,muted).apply {setPadding(0,dp(28),0,dp(12))})
+  root.addView(label("ENVIAR LINK",12f,muted).apply {setPadding(0,dp(28),0,dp(12))})
   val actions=LinearLayout(this).apply {orientation=LinearLayout.HORIZONTAL}
   root.addView(actions)
   val inviteButton=Button(this).apply {
@@ -329,7 +332,7 @@ class MainActivity : Activity() {
   hint.addView(label("1  Escolhe partilhar o ecrã ou um link.\\n2  Autoriza a captura, se necessário.\\n3  Envia o convite.\\n4  Continua a utilizar o telemóvel.",14f))
   if(sharedText.isNotBlank())hint.addView(label("\\nRecebemos um conteúdo de outra aplicação. Podes iniciar a partilha agora.",13f,muted))
   root.addView(label("Pode partilhar o ecrã completo ou uma aplicação compatível. Vídeos protegidos podem surgir a preto. O microfone transmite voz quando ativado; a gravação MP4 ainda não inclui áudio.",12f,muted).apply {setPadding(0,dp(22),0,dp(8))})
-  val overlayOption=Button(this).apply{text="Sobrepor câmara a outras apps: "+if(overlayPrefs.getBoolean("allowOverlay",false))"SIM" else "NÃO";isAllCaps=false;setOnClickListener{
+  val overlayOption=Button(this).apply{text="Janela sobre outras apps: "+if(overlayPrefs.getBoolean("allowOverlay",false))"SIM" else "NÃO";isAllCaps=false;setOnClickListener{
    AlertDialog.Builder(this@MainActivity).setTitle("Sobrepor a todas as aplicações?")
     .setPositiveButton("Sim"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",true).apply();text="Sobrepor câmara a outras apps: SIM";requestOverlayPermission()}
     .setNegativeButton("Não"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",false).apply();text="Sobrepor câmara a outras apps: NÃO";if(live)startService(Intent(this@MainActivity,CaptureService::class.java).apply{action="CONTROL";putExtra("hideOverlay",true)})}.show()
