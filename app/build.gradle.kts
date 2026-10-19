@@ -7,8 +7,8 @@ android {
   applicationId = "art.miguelreis.livestream"
   minSdk = 29
   targetSdk = 35
-  versionCode = 20
-  versionName = "1.7.0"
+  versionCode = 21
+  versionName = "2.0.0-beta1"
   buildConfigField("String", "RELAY_URL", "\""+relayUrl.replace("\\","\\\\").replace("\"","\\\"")+"\"")
  }
  buildFeatures { buildConfig = true }
