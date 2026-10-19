@@ -2,7 +2,53 @@ const headers = {"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","
 const text = (message,status=200)=>new Response(message,{status,headers});
 const signalHeaders={"Content-Type":"application/json",...headers};
 const validId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const html = id => `<!doctype html><html lang="pt"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LiveStream</title><style>body{background:#0c1221;color:white;font-family:system-ui;text-align:center;margin:0;padding:20px}img{max-width:95vw;max-height:80vh;object-fit:contain;border-radius:12px}small{color:#b7c1d2}</style><h1>LiveStream</h1><p>Partilha do ecrã em direto</p><img id="video" alt="Transmissão" style="display:none"><p id="state"><small>A aguardar transmissão…</small></p><script>const id=${JSON.stringify(id)};let etag='';const img=document.getElementById('video');const state=document.getElementById('state');async function poll(){try{const r=await fetch('/api/frame/'+id,{cache:'no-store',headers:etag?{'If-None-Match':etag}:{}});if(r.status===304){state.textContent='● EM DIRETO · a aguardar nova imagem'}else if(r.ok){etag=r.headers.get('ETag')||'';const blob=await r.blob();const url=URL.createObjectURL(blob);const old=img.dataset.url;img.src=url;img.style.display='block';img.dataset.url=url;if(old)setTimeout(()=>URL.revokeObjectURL(old),1500);state.textContent='● EM DIRETO · imagem (sem áudio)'}else{state.textContent='A aguardar imagens do telemóvel…'}}catch{state.textContent='Ligação interrompida. A tentar novamente…'}}let running=false;async function loop(){if(!document.hidden&&!running){running=true;await poll();running=false}setTimeout(loop,document.hidden?2000:220)}document.addEventListener('visibilitychange',()=>{if(!document.hidden)state.textContent='A retomar transmissão…'});loop()</script></html>`;
+const html = id => `<!doctype html>
+<html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiveStream · Ver em direto</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,Segoe UI,sans-serif;background:#0b1020;color:#fff}
+.page{height:100%;display:flex;flex-direction:column;gap:10px;padding:12px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-size:18px;font-weight:750;letter-spacing:-.4px}.brand span{color:#4e9aff}
+.actions{display:flex;gap:8px;align-items:center}
+button{background:#1877f2;border:0;color:white;padding:11px 16px;border-radius:11px;font-weight:700;cursor:pointer}
+button:hover{background:#0d65d8}button:focus-visible{outline:3px solid #a3c7ff}
+#stage{background:#000;border:1px solid #27334b;border-radius:14px;min-height:0;flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+#video{width:100%;height:100%;object-fit:contain;display:none}
+#placeholder{color:#bac5d8;text-align:center;padding:20px}
+footer{color:#b7c1d2;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+#stage:fullscreen{border:0;border-radius:0;width:100vw;height:100vh}
+#stage:fullscreen #video{width:100%;height:100%;object-fit:contain}
+#stage:fullscreen #placeholder{font-size:20px}
+@media(max-width:520px){header{flex-wrap:wrap}.brand{font-size:16px}button{padding:10px 12px}footer{font-size:11px}}
+</style></head>
+<body><main class="page"><header><div class="brand"><span>●</span> LiveStream <small style="font-weight:400;color:#aebbd2">· Em direto</small></div><div class="actions"><button id="fullscreen" type="button" aria-label="Ver em ecrã inteiro">⛶ Ecrã inteiro</button></div></header>
+<section id="stage"><img id="video" alt="Ecrã partilhado em direto"><div id="placeholder">A aguardar transmissão…</div></section>
+<footer><span id="state" role="status">A ligar…</span><span>Sem áudio · ESC para sair do ecrã inteiro</span></footer></main>
+<script>
+const id=${JSON.stringify(id)};
+let etag='',currentUrl='',running=false;
+const img=document.getElementById('video'),state=document.getElementById('state'),placeholder=document.getElementById('placeholder'),stage=document.getElementById('stage'),button=document.getElementById('fullscreen');
+button.addEventListener('click',async()=>{
+ try{if(document.fullscreenElement)await document.exitFullscreen();else await stage.requestFullscreen()}
+ catch{state.textContent='O navegador não permitiu o ecrã inteiro'}
+});
+document.addEventListener('fullscreenchange',()=>{button.textContent=document.fullscreenElement?'⤢ Sair do ecrã inteiro':'⛶ Ecrã inteiro'});
+async function poll(){
+ try{
+  const response=await fetch('/api/frame/'+id,{cache:'no-store',headers:etag?{'If-None-Match':etag}:{}});
+  if(response.status===304){state.textContent='● Em direto'}
+  else if(response.ok){
+   etag=response.headers.get('ETag')||'';
+   const url=URL.createObjectURL(await response.blob());
+   img.onload=()=>{if(currentUrl)URL.revokeObjectURL(currentUrl);currentUrl=url;img.style.display='block';placeholder.style.display='none'};
+   img.src=url;state.textContent='● Em direto · imagem recebida';
+  }else{state.textContent='A aguardar imagens…';etag=''}
+ }catch{state.textContent='Ligação interrompida · a tentar novamente'}
+}
+async function loop(){if(!document.hidden&&!running){running=true;try{await poll()}finally{running=false}}setTimeout(loop,document.hidden?2000:220)}
+loop();
+</script></body></html>`;
 export default {
  async fetch(request,env){
   const url=new URL(request.url);
