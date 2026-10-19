@@ -87,7 +87,7 @@ class CaptureService: Service() {
    if(nextMic!=micEnabled){micEnabled=nextMic;if(micEnabled && checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startMicrophone() else stopMicrophone()}
    if(intent.hasExtra("overlayEnabled"))overlayEnabled=intent.getBooleanExtra("overlayEnabled",overlayEnabled)
    if(intent.getBooleanExtra("showOverlay",false) && overlayEnabled)showPresenterOverlay()
-   if(intent.getBooleanExtra("hideOverlay",false))presenterOverlay?.hide()
+   if(intent.getBooleanExtra("hideOverlay",false) || !overlayEnabled)presenterOverlay?.hide()
    return START_NOT_STICKY
   }
   if(projection!=null)return START_NOT_STICKY
@@ -205,12 +205,12 @@ class CaptureService: Service() {
   if(micEnabled)startMicrophone()
   if(cameraMode!=0){try{cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start()){cameraInset=null;lastError="Câmara indisponível"}}}catch(_:Exception){cameraInset=null;lastError="Câmara não disponível"}}
   configureCamera()
-  if(cameraMode!=0 && overlayEnabled)showPresenterOverlay()
+  if(overlayEnabled)showPresenterOverlay()
   reportState(false)
   return START_NOT_STICKY
  }
   private fun showPresenterOverlay(){
-   if(cameraMode==0 || !Settings.canDrawOverlays(this))return
+   if(!overlayEnabled || !Settings.canDrawOverlays(this))return
    if(presenterOverlay==null)presenterOverlay=PresenterOverlay(this,{cameraInset},{micEnabled},{
     if(micEnabled){micEnabled=false;stopMicrophone()}else if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){micEnabled=true;startMicrophone()}
    },{setCamera(if(cameraMode==1)2 else 1)},{setCamera(0)},{stopSelf()},{x,y,size->cameraX=x;cameraY=y;cameraSize=size;configureCamera()})
