@@ -71,7 +71,7 @@ class CaptureService: Service() {
   (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
   val stop=PendingIntent.getService(this,0,Intent(this,CaptureService::class.java).apply{action="STOP"},PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
   val notification=Notification.Builder(this,"capture").setContentTitle("LiveStream em direto").setContentText("O ecrã está a ser partilhado").setSmallIcon(android.R.drawable.ic_menu_share).addAction(Notification.Action.Builder(null,"Parar",stop).build()).build()
-  startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or (if(micEnabled)ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0) or (if(cameraMode!=0)ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0))
+  try{startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or (if(micEnabled)ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0) or (if(cameraMode!=0)ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0))}catch(e:Exception){lastError="Permissões da transmissão: "+e.javaClass.simpleName;reportState(false);stopSelf();return START_NOT_STICKY}
   val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
   @Suppress("DEPRECATION")
   val data=if(Build.VERSION.SDK_INT>=33)intent?.getParcelableExtra("resultData",Intent::class.java) else intent?.getParcelableExtra("resultData")
@@ -209,5 +209,5 @@ class CaptureService: Service() {
    },"LiveStreamAudio").apply{isDaemon=true;start()}
   }catch(_:Exception){audioRunning=false}
  }
- override fun onDestroy(){cameraInset?.stop();cameraInset=null;audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();networkWorker.shutdownNow();super.onDestroy()}
+ override fun onDestroy(){if(lastError.isBlank())lastError="Transmissão terminada";reportState(false);cameraInset?.stop();cameraInset=null;audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();networkWorker.shutdownNow();super.onDestroy()}
 }
