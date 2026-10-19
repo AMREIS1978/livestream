@@ -27,7 +27,7 @@ footer{color:#b7c1d2;font-size:13px;display:flex;align-items:center;justify-cont
 <footer><span id="state" role="status">A ligar…</span><span>Som opcional · ESC para sair do ecrã inteiro</span></footer></main>
 <script>
 const id=${JSON.stringify(id)};
-let etag='',currentUrl='',running=false;let lastSeqAt=0;
+let etag='',currentUrl='',running=false;let lastSeqAt=0,firstPollAt=Date.now(),lastFrameAt=0;
 const img=document.getElementById('video'),state=document.getElementById('state'),placeholder=document.getElementById('placeholder'),stage=document.getElementById('stage'),button=document.getElementById('fullscreen');
 button.addEventListener('click',async()=>{
  try{if(document.fullscreenElement)await document.exitFullscreen();else await stage.requestFullscreen()}
@@ -37,14 +37,14 @@ document.addEventListener('fullscreenchange',()=>{button.textContent=document.fu
 async function poll(){
  try{
   const response=await fetch('/api/frame/'+id,{cache:'no-store',headers:etag?{'If-None-Match':etag}:{}});
-  if(response.status===304){state.textContent='● Em direto'}
+  if(response.status===304){state.textContent=lastFrameAt?'● Em direto · imagem sem alterações':'A estabelecer ligação…'}
   else if(response.ok){
    etag=response.headers.get('ETag')||'';
    const url=URL.createObjectURL(await response.blob());
-   img.onload=()=>{if(currentUrl)URL.revokeObjectURL(currentUrl);currentUrl=url;img.style.display='block';placeholder.style.display='none';lastSeqAt=Date.now()};
+   img.onload=()=>{if(currentUrl)URL.revokeObjectURL(currentUrl);currentUrl=url;img.style.display='block';placeholder.style.display='none';lastSeqAt=Date.now();lastFrameAt=Date.now()};
    img.src=url;state.textContent='● Em direto · imagem recebida';
-  }else{state.textContent='A aguardar imagens…';etag=''}
- }catch{state.textContent='Ligação interrompida · a tentar novamente'}
+  }else{state.textContent=response.status===404?'Sem transmissão ativa neste link':'Servidor indisponível (HTTP '+response.status+')';etag='';if(Date.now()-firstPollAt>12000 && !lastFrameAt)placeholder.textContent='Ainda não chegaram imagens. Confirme que a partilha está ativa no telemóvel e que o link pertence à sessão atual.'}
+ }catch{state.textContent='Sem ligação ao servidor · a tentar novamente';if(!lastFrameAt)placeholder.textContent='Não foi possível contactar o servidor de transmissão.'}
 }
 async function loop(){if(!document.hidden&&!running){running=true;try{await poll()}finally{running=false}}setTimeout(loop,document.hidden?2000:(Date.now()-lastSeqAt>2000?400:120))}
 let audioContext=null,audioTag='',nextAudioTime=0,audioActive=false;
