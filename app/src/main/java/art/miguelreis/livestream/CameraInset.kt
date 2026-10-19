@@ -86,18 +86,25 @@ class CameraInset(private val context:Context, private val front:Boolean) {
   if(inset.isRecycled)return
   try {
    val canvas=Canvas(target)
-   val width=(target.width*.28f).toInt().coerceAtLeast(100)
-   val height=(width*3/4).coerceAtLeast(75)
-   val margin=(target.width*.035f).toInt()
-   val destination=Rect(target.width-width-margin,margin,target.width-margin,margin+height)
-   val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-   canvas.drawRoundRect(destination.left-3f,destination.top-3f,destination.right+3f,destination.bottom+3f,12f,12f,Paint().apply{color=Color.WHITE})
-   if(front){
-    canvas.save()
-    canvas.scale(-1f,1f,destination.exactCenterX(),destination.exactCenterY())
-    canvas.drawBitmap(inset,null,destination,paint)
-    canvas.restore()
-   }else canvas.drawBitmap(inset,null,destination,paint)
+   // Reserve a separate column for the presenter instead of covering screen content.
+   val strip=(target.width*.30f).toInt().coerceAtLeast(80)
+   val contentWidth=target.width-strip
+   val original=target.copy(Bitmap.Config.ARGB_8888,false)
+   try{
+    canvas.drawColor(Color.rgb(15,23,42))
+    val content=Rect(0,0,contentWidth,target.height)
+    canvas.drawBitmap(original,null,content,Paint(Paint.FILTER_BITMAP_FLAG))
+    val insetHeight=(strip*4/3).coerceAtMost(target.height/2)
+    val top=(target.height-insetHeight)/2
+    val destination=Rect(contentWidth+4,top,target.width-4,top+insetHeight)
+    val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    if(front){
+     canvas.save()
+     canvas.scale(-1f,1f,destination.exactCenterX(),destination.exactCenterY())
+     canvas.drawBitmap(inset,null,destination,paint)
+     canvas.restore()
+    }else canvas.drawBitmap(inset,null,destination,paint)
+   }finally{original.recycle()}
   }catch(_:Exception){}
   }
  }
