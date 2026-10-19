@@ -27,7 +27,9 @@ export class StreamRoom {
    if(key.length<50 || key.length>160)return text("Invalid key",403);
    if(this.key!==null && this.key!==key)return text("Forbidden",403);
    const buffer=await request.arrayBuffer();
-   if(buffer.byteLength<100 || buffer.byteLength>700000)return text("Invalid frame size",413);\n   const signature=new Uint8Array(buffer,0,3);\n   if(signature[0]!==255 || signature[1]!==216 || signature[2]!==255)return text("Invalid JPEG",415);
+   if(buffer.byteLength<100 || buffer.byteLength>700000)return text("Invalid frame size",413);
+   const signature=new Uint8Array(buffer,0,3);
+   if(signature[0]!==255 || signature[1]!==216 || signature[2]!==255)return text("Invalid JPEG",415);
    this.key=key;this.frame=buffer;this.updated=now;
    return new Response(null,{status:204,headers});
   }
