@@ -93,64 +93,84 @@ class CaptureService: Service() {
   if(saveAlongside)sharedRecorder=SharedFrameRecorder(this,w,h).also{if(!it.start()){sharedRecorder=null;lastError="Não foi possível iniciar a gravação"}}
   reader=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2)
   reader?.setOnImageAvailableListener({ r ->
-   val image=r.acquireLatestImage()?:return@setOnImageAvailableListener
-   val now=android.os.SystemClock.elapsedRealtime()
-   if(now-lastFrameAt<intervalMs || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
+   val image=try{r.acquireLatestImage()}catch(_:Exception){null}?:return@setOnImageAvailableListener
+   val now=SystemClock.elapsedRealtime()
+   if(now-lastFrameAt<intervalMs || !busy.compareAndSet(false,true)){
+    image.close()
+    return@setOnImageAvailableListener
+   }
    lastFrameAt=now
    try {
-    val plane=image.planes[0];val pixelStride=plane.pixelStride;val rowStride=plane.rowStride
-    val bmp=Bitmap.createBitmap(rowStride/pixelStride,h,Bitmap.Config.ARGB_8888)
-    bmp.copyPixelsFromBuffer(plane.buffer)
-    val cropped=Bitmap.createBitmap(bmp,0,0,w,h)
-    sharedRecorder?.addFrame(cropped)
-    val out=ByteArrayOutputStream()
-    var q=jpegQuality
-    do {
-     out.reset()
-     cropped.compress(Bitmap.CompressFormat.JPEG,q,out)
-     if(out.size()<=650000)break
-     q-=10
-    }while(q>=25)
-    val bytes=out.toByteArray();bmp.recycle();cropped.recycle()
-    if(bytes.size<100 || bytes.size>690000){lastError="Imagem demasiado grande";reportState(false);busy.set(false);return@setOnImageAvailableListener}
-    worker.execute { try {
-     var delivered=false
-     val started=android.os.SystemClock.elapsedRealtime()
-     for(attempt in 0..1) {
-      var conn:HttpURLConnection?=null
+    worker.execute {
+     try {
+      val plane=image.planes[0]
+      val rowWidth=plane.rowStride/plane.pixelStride
+      val source=Bitmap.createBitmap(rowWidth,h,Bitmap.Config.ARGB_8888)
       try {
-       conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
-       conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=2500;conn.readTimeout=2500
-       conn.setRequestProperty("Content-Type","image/jpeg")
-       conn.setRequestProperty("X-Publish-Key",publisherKey)
-       conn.outputStream.use{it.write(bytes)}
-       val code=conn.responseCode
-       lastHttpStatus=code
-       if(code in 200..299) {delivered=true;lastError="";break}
-       lastError="HTTP $code"
-       if(code in 400..499 && code!=429) break
-      }catch(e:Exception){lastError=e.javaClass.simpleName} finally {conn?.disconnect()}
-      if(attempt==0) Thread.sleep(120)
+       source.copyPixelsFromBuffer(plane.buffer)
+       val cropped=Bitmap.createBitmap(source,0,0,w,h)
+       try {
+        sharedRecorder?.addFrame(cropped)
+        val out=ByteArrayOutputStream()
+        var q=jpegQuality
+        do {
+         out.reset()
+         cropped.compress(Bitmap.CompressFormat.JPEG,q,out)
+         if(out.size()<=650000)break
+         q-=10
+        }while(q>=25)
+        val bytes=out.toByteArray()
+        if(bytes.size<100 || bytes.size>690000){
+         lastError="Imagem demasiado grande";reportState(false)
+        }else{
+         var delivered=false
+         val started=SystemClock.elapsedRealtime()
+         for(attempt in 0..1){
+          var conn:HttpURLConnection?=null
+          try{
+           conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
+           conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=1800;conn.readTimeout=1800
+           conn.setRequestProperty("Content-Type","image/jpeg")
+           conn.setRequestProperty("X-Publish-Key",publisherKey)
+           conn.outputStream.use{it.write(bytes)}
+           val code=conn.responseCode
+           lastHttpStatus=code
+           if(code in 200..299){delivered=true;lastError="";break}
+           lastError="HTTP $code"
+           if(code in 400..499 && code!=429)break
+          }catch(e:Exception){lastError=e.javaClass.simpleName}
+          finally{conn?.disconnect()}
+          if(attempt==0)Thread.sleep(80)
+         }
+         val duration=SystemClock.elapsedRealtime()-started
+         lastUploadMs=duration
+         failures=if(delivered)0 else (failures+1).coerceAtMost(100)
+         if(delivered && duration<350){
+          jpegQuality=(jpegQuality+2).coerceAtMost(78);intervalMs=220L
+         }else if(delivered && duration<800){
+          jpegQuality=jpegQuality.coerceAtMost(68);intervalMs=300L
+         }else{
+          jpegQuality=(jpegQuality-8).coerceAtLeast(30)
+          intervalMs=if(failures>2)850L else 480L
+         }
+         reportState(delivered)
+        }
+       }finally{cropped.recycle()}
+      }finally{source.recycle()}
+     }catch(e:Exception){
+      lastError=e.javaClass.simpleName
+      reportState(false)
+     }finally{
+      image.close()
+      busy.set(false)
      }
-     val duration=android.os.SystemClock.elapsedRealtime()-started
-     lastUploadMs=duration
-     failures=if(delivered) 0 else (failures+1).coerceAtMost(100)
-     if(delivered && duration<350) {
-      jpegQuality=(jpegQuality+2).coerceAtMost(78)
-      intervalMs=220L
-     } else if(delivered && duration<800) {
-      jpegQuality=jpegQuality.coerceAtMost(68)
-      intervalMs=300L
-     } else {
-      jpegQuality=(jpegQuality-8).coerceAtLeast(30)
-      intervalMs=if(failures>2) 850L else 480L
-     }
-     reportState(delivered)
-    } catch(_:InterruptedException){Thread.currentThread().interrupt()} finally {busy.set(false)} }
-   } catch(_:Exception){busy.set(false)} finally{image.close()}
+    }
+   }catch(_:java.util.concurrent.RejectedExecutionException){
+    image.close();busy.set(false)
+   }
   },captureHandler)
   display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)
   return START_NOT_STICKY
  }
- override fun onDestroy(){liveLabel=null;overlayView?.let { try {overlayManager?.removeView(it)}catch(_:Exception){} };overlayView=null;reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();worker.shutdownNow();sharedRecorder?.finish();sharedRecorder=null;super.onDestroy()}
+ override fun onDestroy(){liveLabel=null;overlayView?.let { try {overlayManager?.removeView(it)}catch(_:Exception){} };overlayView=null;reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();worker.execute { try{sharedRecorder?.finish()}catch(_:Exception){} };worker.shutdown();sharedRecorder=null;super.onDestroy()}
 }
