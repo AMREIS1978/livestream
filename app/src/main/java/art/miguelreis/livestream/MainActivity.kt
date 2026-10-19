@@ -7,18 +7,14 @@ import android.media.projection.MediaProjectionManager
 import android.media.projection.MediaProjectionConfig
 import android.os.Bundle
 import android.os.Build
-import android.provider.Settings
-import android.net.Uri
 import android.widget.*
 import java.util.UUID
 
 class MainActivity : Activity() {
  private val requestCode = 123
- private val overlayRequestCode = 124
  private val recordRequestCode = 125
  private lateinit var recordButton:Button
  private lateinit var stopRecordButton:Button
- private var overlayPrompted = false
  private lateinit var status: TextView
  private lateinit var startButton: Button
  private lateinit var stopButton: Button
@@ -29,6 +25,8 @@ class MainActivity : Activity() {
  private var sharedText = ""
  private lateinit var contentInput:EditText
  private lateinit var saveLiveCheck:CheckBox
+ private lateinit var captureMode:RadioGroup
+ private var shareEntireScreen=true
  private fun shareContent(){
   val raw=contentInput.text.toString().trim()
   if(raw.isBlank()){Toast.makeText(this,"Cole primeiro o link do conteúdo",Toast.LENGTH_SHORT).show();return}
@@ -67,11 +65,6 @@ class MainActivity : Activity() {
  }
 
  private fun begin() {
-  if (!Settings.canDrawOverlays(this) && !overlayPrompted) {
-   overlayPrompted = true
-   AlertDialog.Builder(this).setTitle("Aviso de transmissão").setMessage("Para mostrar o aviso EM DIRETO sobre outras aplicações, autorize a apresentação sobre outras aplicações. Pode continuar sem esta opção.").setPositiveButton("Autorizar") { _, _ -> startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")),overlayRequestCode) }.setNegativeButton("Continuar sem aviso") { _, _ -> begin() }.show()
-   return
-  }
   if (!endpoint.startsWith("https://")) {
    status.text = "Ligação ainda não configurada"
    AlertDialog.Builder(this)
@@ -82,8 +75,9 @@ class MainActivity : Activity() {
   }
   session = UUID.randomUUID().toString()
   publisherKey = UUID.randomUUID().toString() + UUID.randomUUID().toString()
+  shareEntireScreen = captureMode.checkedRadioButtonId == 2001
   val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-  startActivityForResult(if(Build.VERSION.SDK_INT>=34)mgr.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()) else mgr.createScreenCaptureIntent(), requestCode)
+  startActivityForResult(if(Build.VERSION.SDK_INT>=34 && shareEntireScreen)mgr.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()) else mgr.createScreenCaptureIntent(), requestCode)
  }
 
  private fun beginRecording(){
@@ -103,6 +97,7 @@ class MainActivity : Activity() {
   status.text = if(saveLiveCheck.isChecked) "Partilha terminada · vídeo guardado em Filmes/LiveStream" else "Partilha terminada"
   startButton.isEnabled = true
   saveLiveCheck.isEnabled=true
+  for(i in 0 until captureMode.childCount)captureMode.getChildAt(i).isEnabled=Build.VERSION.SDK_INT>=34 || i==0
   recordButton.isEnabled=true
   stopRecordButton.isEnabled=false
   stopButton.isEnabled = false
@@ -148,6 +143,17 @@ class MainActivity : Activity() {
    text="▶  Partilhar o meu ecrã";textSize=16f;isAllCaps=false
    setTextColor(Color.WHITE);background=rounded(accent,14)
    setOnClickListener {begin()}
+  }
+  captureMode=RadioGroup(this).apply{
+   orientation=RadioGroup.VERTICAL
+   addView(RadioButton(this@MainActivity).apply{id=2001;text="Todo o telemóvel";isChecked=true;setTextColor(Color.rgb(24,36,56))})
+   addView(RadioButton(this@MainActivity).apply{id=2002;text="Apenas uma aplicação";setTextColor(Color.rgb(24,36,56))})
+  }
+  card.addView(label("O QUE QUER PARTILHAR?",12f,muted).apply{setPadding(0,0,0,dp(6))})
+  card.addView(captureMode)
+  if(Build.VERSION.SDK_INT<34){
+   captureMode.findViewById<RadioButton>(2002).isEnabled=false
+   card.addView(label("A seleção de uma única aplicação requer Android 14 ou superior.",12f,muted))
   }
   card.addView(startButton,LinearLayout.LayoutParams(-1,dp(58)))
   saveLiveCheck=CheckBox(this).apply{text="Gravar também esta transmissão (MP4)";isChecked=false;setTextColor(Color.rgb(24,36,56))}
@@ -214,7 +220,7 @@ class MainActivity : Activity() {
   hint.addView(label("COMO FUNCIONA",12f,accent).apply {setPadding(0,0,0,dp(10))})
   hint.addView(label("1  Escolhe partilhar o ecrã ou um link.\\n2  Autoriza a captura, se necessário.\\n3  Envia o convite.\\n4  Continua a utilizar o telemóvel.",14f))
   if(sharedText.isNotBlank())hint.addView(label("\\nRecebemos um conteúdo de outra aplicação. Podes iniciar a partilha agora.",13f,muted))
-  root.addView(label("O indicador EM DIRETO aparece sobre outras aplicações, se autorizado. Vídeos protegidos, como alguns canais de TV, podem surgir a preto. Esta versão não transmite áudio.",12f,muted).apply {setPadding(0,dp(22),0,dp(8))})
+  root.addView(label("Pode partilhar o ecrã completo ou apenas uma aplicação compatível. Vídeos protegidos podem surgir a preto. Esta versão não transmite áudio.",12f,muted).apply {setPadding(0,dp(22),0,dp(8))})
   setContentView(scroll)
  }
 
@@ -222,7 +228,6 @@ class MainActivity : Activity() {
  @Deprecated("Legacy activity result")
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
   super.onActivityResult(requestCode, resultCode, data)
-  if(requestCode==overlayRequestCode){begin();return}
   if(requestCode==recordRequestCode){
    if(resultCode==RESULT_OK && data!=null){
     startForegroundService(Intent(this,RecordService::class.java).apply{putExtra("resultCode",resultCode);putExtra("resultData",data)})
@@ -246,6 +251,8 @@ class MainActivity : Activity() {
    status.text = if(saveLiveCheck.isChecked) "A transmitir e gravar · a estabelecer ligação" else "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
    saveLiveCheck.isEnabled=false
+   captureMode.isEnabled=false
+   for(i in 0 until captureMode.childCount)captureMode.getChildAt(i).isEnabled=false
    recordButton.isEnabled=false
    stopRecordButton.isEnabled=false
    stopButton.isEnabled = true
