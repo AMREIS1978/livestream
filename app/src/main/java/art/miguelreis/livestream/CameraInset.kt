@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicReference
 /** Optional in-stream picture-in-picture camera; no Android system overlay permission. */
 class CameraInset(private val context:Context, private val front:Boolean) {
  private val latest=AtomicReference<Bitmap?>()
+ private val frameLock=Any()
  private val thread=HandlerThread("LiveStreamCamera")
  private var handler:Handler?=null
  private var camera:CameraDevice?=null
@@ -49,7 +50,7 @@ class CameraInset(private val context:Context, private val front:Boolean) {
       val buffer=image.planes[0].buffer
       val data=ByteArray(buffer.remaining());buffer.get(data)
       val bitmap=BitmapFactory.decodeByteArray(data,0,data.size)
-      if(bitmap!=null){latest.getAndSet(bitmap)?.recycle()}
+      if(bitmap!=null){synchronized(frameLock){latest.getAndSet(bitmap)?.recycle()}}
      }catch(_:Exception){}finally{image.close()}
     },handler)
    }
@@ -80,6 +81,7 @@ class CameraInset(private val context:Context, private val front:Boolean) {
  }
 
  fun drawOn(target:Bitmap) {
+  synchronized(frameLock){
   val inset=latest.get()?:return
   if(inset.isRecycled)return
   try {
@@ -97,6 +99,7 @@ class CameraInset(private val context:Context, private val front:Boolean) {
     canvas.restore()
    }else canvas.drawBitmap(inset,null,destination,paint)
   }catch(_:Exception){}
+  }
  }
 
  fun stop(){
@@ -105,6 +108,6 @@ class CameraInset(private val context:Context, private val front:Boolean) {
   try{camera?.close()}catch(_:Exception){}
   try{reader?.close()}catch(_:Exception){}
   thread.quitSafely()
-  latest.getAndSet(null)?.recycle()
+  synchronized(frameLock){latest.getAndSet(null)?.recycle()}
  }
 }
