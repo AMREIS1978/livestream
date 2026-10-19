@@ -35,6 +35,17 @@ class CaptureService: Service() {
  private var sharedText=""
  private var overlayManager:WindowManager?=null
  private var failures=0
+ private var lastHttpStatus=0
+ private var lastError=""
+ private var liveLabel:TextView?=null
+ private val mainHandler=Handler(Looper.getMainLooper())
+ private fun reportState(ok:Boolean) {
+  mainHandler.post {
+   liveLabel?.text=if(ok) "● EM DIRETO" else "● A LIGAR…"
+   val i=Intent("art.miguelreis.livestream.STATUS").setPackage(packageName).putExtra("connected",ok).putExtra("http",lastHttpStatus).putExtra("error",lastError)
+   sendBroadcast(i)
+  }
+ }
  override fun onBind(intent:Intent?)=null
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
@@ -56,6 +67,7 @@ class CaptureService: Service() {
      val share=Intent(Intent.ACTION_SEND).apply { type="text/plain";putExtra(Intent.EXTRA_TEXT,msg);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
      try {startActivity(Intent.createChooser(share,"Enviar link").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}catch(_:Exception){}
     } }
+    liveLabel=live
     panel.addView(live);panel.addView(send)
     val params=WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply { gravity=Gravity.TOP or Gravity.END;x=8;y=80 }
     overlayManager?.addView(panel,params);overlayView=panel
@@ -81,11 +93,12 @@ class CaptureService: Service() {
    lastFrameAt=now
    try {
     val plane=image.planes[0];val pixelStride=plane.pixelStride;val rowStride=plane.rowStride
-    val bmp=Bitmap.createBitmap(w+((rowStride-pixelStride*w)/pixelStride),h,Bitmap.Config.ARGB_8888)
+    val bmp=Bitmap.createBitmap(rowStride/pixelStride,h,Bitmap.Config.ARGB_8888)
     bmp.copyPixelsFromBuffer(plane.buffer)
     val cropped=Bitmap.createBitmap(bmp,0,0,w,h)
     val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,48,out)
     val bytes=out.toByteArray();bmp.recycle();cropped.recycle()
+    if(bytes.size<100 || bytes.size>690000){busy.set(false);image.close();return@setOnImageAvailableListener}
     worker.execute { try {
      var delivered=false
      for(attempt in 0..1) {
@@ -97,17 +110,20 @@ class CaptureService: Service() {
        conn.setRequestProperty("X-Publish-Key",publisherKey)
        conn.outputStream.use{it.write(bytes)}
        val code=conn.responseCode
-       if(code in 200..299) {delivered=true;break}
+       lastHttpStatus=code
+       if(code in 200..299) {delivered=true;lastError="";break}
+       lastError="HTTP $code"
        if(code in 400..499 && code!=429) break
-      }catch(_:Exception){} finally {conn?.disconnect()}
+      }catch(e:Exception){lastError=e.javaClass.simpleName} finally {conn?.disconnect()}
       if(attempt==0) Thread.sleep(180)
      }
      failures=if(delivered) 0 else (failures+1).coerceAtMost(100)
+     reportState(delivered)
     } catch(_:InterruptedException){Thread.currentThread().interrupt()} finally {busy.set(false)} }
    } catch(_:Exception){busy.set(false)} finally{image.close()}
   },captureHandler)
   display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)
   return START_NOT_STICKY
  }
- override fun onDestroy(){overlayView?.let { try {overlayManager?.removeView(it)}catch(_:Exception){} };overlayView=null;reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();worker.shutdownNow();super.onDestroy()}
+ override fun onDestroy(){liveLabel=null;overlayView?.let { try {overlayManager?.removeView(it)}catch(_:Exception){} };overlayView=null;reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();worker.shutdownNow();super.onDestroy()}
 }
