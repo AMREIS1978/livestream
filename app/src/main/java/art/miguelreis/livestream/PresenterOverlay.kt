@@ -22,6 +22,7 @@ class PresenterOverlay(
  private val getMic:()->Boolean,
  private val onToggleMic:()->Unit,
  private val onFlip:()->Unit,
+ private val onToggleCamera:()->Unit,
  private val onHide:()->Unit,
  private val onStop:()->Unit,
  private val onMove:(Float,Float,Float)->Unit
@@ -34,6 +35,7 @@ class PresenterOverlay(
  private var params:WindowManager.LayoutParams?=null
  private var image:View?=null
  private var soundButton:Button?=null
+ private var cameraButton:Button?=null
  private fun position(){
   val p=params?:return
   val metrics=context.resources.displayMetrics
@@ -81,10 +83,13 @@ class PresenterOverlay(
   val mic=button(if(getMic())"🎙 ON" else "🔇 OFF"){onToggleMic();refresh()}
   soundButton=mic
   controls.addView(mic,LinearLayout.LayoutParams(0,(42*dp).toInt(),1f))
+  val cam=button(if(getCamera()!=null)"📷 ON" else "📷 OFF"){onToggleCamera();refresh()}
+  cameraButton=cam
+  controls.addView(cam,LinearLayout.LayoutParams(0,(42*dp).toInt(),1f))
   controls.addView(button("↺"){onFlip();refresh()},LinearLayout.LayoutParams(0,(42*dp).toInt(),1f))
   controls.addView(button("−"){resize(-24)},LinearLayout.LayoutParams(0,(42*dp).toInt(),1f))
   controls.addView(button("+"){resize(24)},LinearLayout.LayoutParams(0,(42*dp).toInt(),1f))
-  controls.addView(button("×"){onHide();hide()},LinearLayout.LayoutParams(0,(42*dp).toInt(),1f))
+
   box.addView(controls)
   val stopButton=button("■  TERMINAR TRANSMISSÃO"){onStop()}.apply{
    setTextColor(Color.WHITE);backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(196,46,57));textSize=12f
@@ -124,7 +129,7 @@ class PresenterOverlay(
   try{wm.updateViewLayout(box,lp)}catch(_:Exception){}
   position()
  }
- fun refresh(){soundButton?.text=if(getMic())"🎙 ON" else "🔇 OFF";image?.invalidate()}
+ fun refresh(){soundButton?.text=if(getMic())"🎙 ON" else "🔇 OFF";cameraButton?.text=if(getCamera()!=null)"📷 ON" else "📷 OFF";image?.invalidate()}
  fun hide(){
   val box=root?:return
   root=null;image=null;params=null
