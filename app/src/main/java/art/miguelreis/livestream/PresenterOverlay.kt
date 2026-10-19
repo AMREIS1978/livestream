@@ -5,6 +5,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -26,8 +27,8 @@ class PresenterOverlay(
 ){
  private val wm=context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
  private val dp=context.resources.displayMetrics.density
- private var width=(168*dp).toInt()
- private var height=(252*dp).toInt()
+ private var width=(154*dp).toInt()
+ private var height=(292*dp).toInt()
  private var root:LinearLayout?=null
  private var params:WindowManager.LayoutParams?=null
  private var image:View?=null
@@ -43,23 +44,24 @@ class PresenterOverlay(
   if(root!=null || !Settings.canDrawOverlays(context))return
   val box=LinearLayout(context).apply{
    orientation=LinearLayout.VERTICAL
-   setBackgroundColor(Color.rgb(15,23,42))
+   background=GradientDrawable().apply{setColor(Color.rgb(12,19,34));cornerRadius=19*dp;setStroke((2*dp).toInt(),Color.rgb(52,128,244))}
+   clipToOutline=true
   }
   val bar=TextView(context).apply{
-   text="⠿  APRESENTADOR  ·  arrastar"
-   textSize=11f
+   text="⠿  LIVE  ·  ARRASTAR"
+   textSize=10f
    setTextColor(Color.WHITE)
    gravity=Gravity.CENTER
-   setPadding(4,8,4,8)
+   setPadding(4,6,4,6)
   }
-  box.addView(bar,LinearLayout.LayoutParams(-1,(35*dp).toInt()))
+  box.addView(bar,LinearLayout.LayoutParams(-1,(32*dp).toInt()))
   val preview=object:View(context){
    private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
    override fun onDraw(canvas:Canvas){
     super.onDraw(canvas)
     canvas.drawColor(Color.rgb(30,41,59))
     val camera=getCamera()
-    if(camera!=null)camera.drawPreview(canvas,width,height)
+    if(camera!=null)camera.drawPreview(canvas,this.width,this.height)
     else{
      paint.color=Color.WHITE;paint.textSize=14*dp
      canvas.drawText("Câmara desligada",12f,height/2f,paint)
@@ -69,10 +71,10 @@ class PresenterOverlay(
   }
   box.addView(preview,LinearLayout.LayoutParams(-1,0,1f))
   image=preview
-  val controls=LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL}
+  val controls=LinearLayout(context).apply{orientation=LinearLayout.HORIZONTAL;setPadding(3,2,3,4)}
   fun button(label:String,callback:()->Unit):Button=Button(context).apply{
    text=label;textSize=11f;isAllCaps=false;minWidth=0;minimumWidth=0
-   setPadding(0,0,0,0);setOnClickListener{callback()}
+   setPadding(0,0,0,0);backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(32,51,78));setTextColor(Color.WHITE);setOnClickListener{callback()}
   }
   val mic=button(if(getMic())"🎙 ON" else "🔇 OFF"){onToggleMic();refresh()}
   soundButton=mic
@@ -110,7 +112,7 @@ class PresenterOverlay(
   val lp=params?:return
   val box=root?:return
   val newWidth=(lp.width+(change*dp).toInt()).coerceIn((112*dp).toInt(),(context.resources.displayMetrics.widthPixels*.48f).toInt())
-  lp.width=newWidth;lp.height=(newWidth*1.5f).toInt()
+  lp.width=newWidth;lp.height=(newWidth*1.90f).toInt()
   lp.x=lp.x.coerceIn(0,(context.resources.displayMetrics.widthPixels-lp.width).coerceAtLeast(0))
   lp.y=lp.y.coerceIn(0,(context.resources.displayMetrics.heightPixels-lp.height).coerceAtLeast(0))
   try{wm.updateViewLayout(box,lp)}catch(_:Exception){}
