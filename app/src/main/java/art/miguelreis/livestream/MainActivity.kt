@@ -145,6 +145,7 @@ class MainActivity : Activity() {
    setPadding(dp(20),dp(20),dp(20),dp(20))
   }
   root.addView(card)
+  root.addView(Button(this).apply { text="◉  Câmaras + localização em direto";isAllCaps=false;setOnClickListener {startActivity(Intent(this@MainActivity,DuoActivity::class.java))} },LinearLayout.LayoutParams(-1,dp(60)).apply {topMargin=dp(16)})
   card.addView(label("ESTADO DA TRANSMISSÃO",11f,muted).apply {setPadding(0,0,0,dp(10))})
   status=label("●  Pronto para começar",17f,accent).apply {setPadding(0,0,0,dp(18))}
   card.addView(status)
