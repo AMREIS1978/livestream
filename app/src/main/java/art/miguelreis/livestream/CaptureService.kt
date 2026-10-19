@@ -32,22 +32,18 @@ class CaptureService: Service() {
  private var endpoint="";private var session="";private var publisherKey=""
  private var lastFrameAt=0L
  private var captureThread:HandlerThread?=null
- private var overlayView:LinearLayout?=null
- private var sharedText=""
+  private var sharedText=""
  private var saveAlongside=false
  private var sharedRecorder:SharedFrameRecorder?=null
- private var overlayManager:WindowManager?=null
  private var failures=0
  private var jpegQuality=70
  private var intervalMs=260L
  private var lastUploadMs=0L
  private var lastHttpStatus=0
  private var lastError=""
- private var liveLabel:TextView?=null
  private val mainHandler=Handler(Looper.getMainLooper())
  private fun reportState(ok:Boolean) {
   mainHandler.post {
-   liveLabel?.text=if(ok) "● EM DIRETO" else "● A LIGAR…"
    val i=Intent("art.miguelreis.livestream.STATUS").setPackage(packageName).putExtra("connected",ok).putExtra("http",lastHttpStatus).putExtra("error",lastError)
    sendBroadcast(i)
   }
@@ -62,35 +58,6 @@ class CaptureService: Service() {
   val stop=PendingIntent.getService(this,0,Intent(this,CaptureService::class.java).apply{action="STOP"},PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
   val notification=Notification.Builder(this,"capture").setContentTitle("LiveStream em direto").setContentText("O ecrã está a ser partilhado").setSmallIcon(android.R.drawable.ic_menu_share).addAction(Notification.Action.Builder(null,"Parar",stop).build()).build()
   startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-  if(Settings.canDrawOverlays(this)) {
-   try {
-    overlayManager=getSystemService(WINDOW_SERVICE) as WindowManager
-    val panel=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL;setBackgroundColor(Color.rgb(160,22,38));setPadding(8,4,8,4) }
-    val live=TextView(this).apply { text="● EM DIRETO";textSize=12f;setTextColor(Color.WHITE);setPadding(10,10,10,10) }
-    val send=Button(this).apply { text="PARTILHAR";textSize=11f;setOnClickListener {
-     val link="$endpoint/watch/$session"
-     val msg="Vê isto 👀 Estou a partilhar o meu ecrã em direto: $link"+if(sharedText.isNotBlank()) "\\nConteúdo: $sharedText" else ""
-     val share=Intent(Intent.ACTION_SEND).apply { type="text/plain";putExtra(Intent.EXTRA_TEXT,msg);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-     try {startActivity(Intent.createChooser(share,"Enviar link").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}catch(_:Exception){}
-    } }
-    liveLabel=live
-    val stopButton=Button(this).apply {text="■";textSize=12f;setOnClickListener{stopSelf()}}
-    val handle=TextView(this).apply{text="⋮⋮";textSize=20f;setTextColor(Color.WHITE);setPadding(10,10,10,10)}
-    panel.addView(handle);panel.addView(live);panel.addView(send);panel.addView(stopButton)
-    val params=WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply { gravity=Gravity.TOP or Gravity.END;x=8;y=80 }
-    handle.setOnTouchListener(object:android.view.View.OnTouchListener{
-     var startX=0;var startY=0;var downX=0f;var downY=0f
-     override fun onTouch(v:android.view.View,event:MotionEvent):Boolean{
-      when(event.actionMasked){
-       MotionEvent.ACTION_DOWN->{startX=params.x;startY=params.y;downX=event.rawX;downY=event.rawY;return true}
-       MotionEvent.ACTION_MOVE->{params.x=(startX-(event.rawX-downX).toInt()).coerceAtLeast(0);params.y=(startY+(event.rawY-downY).toInt()).coerceAtLeast(0);try{overlayManager?.updateViewLayout(panel,params)}catch(_:Exception){};return true}
-      }
-      return true
-     }
-    })
-    overlayManager?.addView(panel,params);overlayView=panel
-   }catch(_:Exception) { overlayView=null }
-  }
   val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
   @Suppress("DEPRECATION")
   val data=if(Build.VERSION.SDK_INT>=33)intent?.getParcelableExtra("resultData",Intent::class.java) else intent?.getParcelableExtra("resultData")
@@ -185,5 +152,5 @@ class CaptureService: Service() {
   display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)
   return START_NOT_STICKY
  }
- override fun onDestroy(){liveLabel=null;overlayView?.let { try {overlayManager?.removeView(it)}catch(_:Exception){} };overlayView=null;reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();super.onDestroy()}
+ override fun onDestroy(){reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();super.onDestroy()}
 }
