@@ -89,7 +89,7 @@ class CaptureService: Service() {
   projection?.registerCallback(object:MediaProjection.Callback(){override fun onStop(){stopSelf()}},handler)
   val metrics=resources.displayMetrics
   val scale=(960f / metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
-  val w=(metrics.widthPixels*scale).toInt().coerceAtLeast(2);val h=(metrics.heightPixels*scale).toInt().coerceAtLeast(2)
+  val w=((metrics.widthPixels*scale).toInt().coerceAtLeast(2)/2)*2;val h=((metrics.heightPixels*scale).toInt().coerceAtLeast(2)/2)*2
   if(saveAlongside)sharedRecorder=SharedFrameRecorder(this,w,h).also{if(!it.start()){sharedRecorder=null;lastError="Não foi possível iniciar a gravação"}}
   reader=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2)
   reader?.setOnImageAvailableListener({ r ->
