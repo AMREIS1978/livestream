@@ -83,22 +83,22 @@ class CaptureService: Service() {
   val captureHandler=Handler(captureThread!!.looper)
   projection?.registerCallback(object:MediaProjection.Callback(){override fun onStop(){stopSelf()}},handler)
   val metrics=resources.displayMetrics
-  val scale=(640f / metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
+  val scale=(960f / metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
   val w=(metrics.widthPixels*scale).toInt().coerceAtLeast(2);val h=(metrics.heightPixels*scale).toInt().coerceAtLeast(2)
   reader=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2)
   reader?.setOnImageAvailableListener({ r ->
    val image=r.acquireLatestImage()?:return@setOnImageAvailableListener
    val now=android.os.SystemClock.elapsedRealtime()
-   if(now-lastFrameAt<300 || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
+   if(now-lastFrameAt<280 || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
    lastFrameAt=now
    try {
     val plane=image.planes[0];val pixelStride=plane.pixelStride;val rowStride=plane.rowStride
     val bmp=Bitmap.createBitmap(rowStride/pixelStride,h,Bitmap.Config.ARGB_8888)
     bmp.copyPixelsFromBuffer(plane.buffer)
     val cropped=Bitmap.createBitmap(bmp,0,0,w,h)
-    val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,42,out)
+    val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,65,out)
     val bytes=out.toByteArray();bmp.recycle();cropped.recycle()
-    if(bytes.size<100 || bytes.size>690000){busy.set(false);return@setOnImageAvailableListener}
+    if(bytes.size<100 || bytes.size>690000){lastError="Imagem demasiado grande";reportState(false);busy.set(false);return@setOnImageAvailableListener}
     worker.execute { try {
      var delivered=false
      for(attempt in 0..1) {
