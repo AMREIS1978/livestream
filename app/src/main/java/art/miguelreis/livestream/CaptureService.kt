@@ -83,20 +83,20 @@ class CaptureService: Service() {
   val captureHandler=Handler(captureThread!!.looper)
   projection?.registerCallback(object:MediaProjection.Callback(){override fun onStop(){stopSelf()}},handler)
   val metrics=resources.displayMetrics
-  val scale=(720f / metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
+  val scale=(640f / metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
   val w=(metrics.widthPixels*scale).toInt().coerceAtLeast(2);val h=(metrics.heightPixels*scale).toInt().coerceAtLeast(2)
   reader=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2)
   reader?.setOnImageAvailableListener({ r ->
    val image=r.acquireLatestImage()?:return@setOnImageAvailableListener
    val now=android.os.SystemClock.elapsedRealtime()
-   if(now-lastFrameAt<350 || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
+   if(now-lastFrameAt<300 || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
    lastFrameAt=now
    try {
     val plane=image.planes[0];val pixelStride=plane.pixelStride;val rowStride=plane.rowStride
     val bmp=Bitmap.createBitmap(rowStride/pixelStride,h,Bitmap.Config.ARGB_8888)
     bmp.copyPixelsFromBuffer(plane.buffer)
     val cropped=Bitmap.createBitmap(bmp,0,0,w,h)
-    val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,48,out)
+    val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,42,out)
     val bytes=out.toByteArray();bmp.recycle();cropped.recycle()
     if(bytes.size<100 || bytes.size>690000){busy.set(false);return@setOnImageAvailableListener}
     worker.execute { try {
@@ -105,7 +105,7 @@ class CaptureService: Service() {
       var conn:HttpURLConnection?=null
       try {
        conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
-       conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=3500;conn.readTimeout=3500
+       conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=2500;conn.readTimeout=2500
        conn.setRequestProperty("Content-Type","image/jpeg")
        conn.setRequestProperty("X-Publish-Key",publisherKey)
        conn.outputStream.use{it.write(bytes)}
@@ -115,7 +115,7 @@ class CaptureService: Service() {
        lastError="HTTP $code"
        if(code in 400..499 && code!=429) break
       }catch(e:Exception){lastError=e.javaClass.simpleName} finally {conn?.disconnect()}
-      if(attempt==0) Thread.sleep(180)
+      if(attempt==0) Thread.sleep(120)
      }
      failures=if(delivered) 0 else (failures+1).coerceAtMost(100)
      reportState(delivered)
