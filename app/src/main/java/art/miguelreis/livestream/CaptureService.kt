@@ -172,5 +172,5 @@ class CaptureService: Service() {
   display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)
   return START_NOT_STICKY
  }
- override fun onDestroy(){liveLabel=null;overlayView?.let { try {overlayManager?.removeView(it)}catch(_:Exception){} };overlayView=null;reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();worker.execute { try{sharedRecorder?.finish()}catch(_:Exception){} };worker.shutdown();sharedRecorder=null;super.onDestroy()}
+ override fun onDestroy(){liveLabel=null;overlayView?.let { try {overlayManager?.removeView(it)}catch(_:Exception){} };overlayView=null;reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();super.onDestroy()}
 }
