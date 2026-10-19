@@ -72,13 +72,11 @@ class CaptureService: Service() {
   val stop=PendingIntent.getService(this,0,Intent(this,CaptureService::class.java).apply{action="STOP"},PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
   val notification=Notification.Builder(this,"capture").setContentTitle("LiveStream em direto").setContentText("O ecrã está a ser partilhado").setSmallIcon(android.R.drawable.ic_menu_share).addAction(Notification.Action.Builder(null,"Parar",stop).build()).build()
   startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or (if(micEnabled)ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0) or (if(cameraMode!=0)ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA else 0))
-  if(micEnabled)startMicrophone()
-  if(cameraMode!=0){cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start()){cameraInset=null;lastError="Câmara indisponível"}}}
   val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
   @Suppress("DEPRECATION")
   val data=if(Build.VERSION.SDK_INT>=33)intent?.getParcelableExtra("resultData",Intent::class.java) else intent?.getParcelableExtra("resultData")
   if(data==null){stopSelf();return START_NOT_STICKY}
-  projection=mgr.getMediaProjection((intent?.getIntExtra("resultCode",Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED),data)
+  try{projection=mgr.getMediaProjection((intent?.getIntExtra("resultCode",Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED),data)}catch(e:Exception){lastError="Captura não autorizada: "+e.javaClass.simpleName;reportState(false);stopSelf();return START_NOT_STICKY}
   val handler=Handler(Looper.getMainLooper())
   captureThread=HandlerThread("LiveStreamCapture",android.os.Process.THREAD_PRIORITY_BACKGROUND).also { it.start() }
   val captureHandler=Handler(captureThread!!.looper)
@@ -176,7 +174,9 @@ class CaptureService: Service() {
     image.close();busy.set(false)
    }
   },captureHandler)
-  display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)
+  try{display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)}catch(e:Exception){lastError="Não foi possível iniciar o ecrã: "+e.javaClass.simpleName;reportState(false);stopSelf();return START_NOT_STICKY}
+  if(micEnabled)startMicrophone()
+  if(cameraMode!=0){try{cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start()){cameraInset=null;lastError="Câmara indisponível"}}}catch(_:Exception){cameraInset=null;lastError="Câmara não disponível"}}
   return START_NOT_STICKY
  }
   private fun startMicrophone(){
