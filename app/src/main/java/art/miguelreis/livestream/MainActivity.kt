@@ -162,7 +162,7 @@ class MainActivity : Activity() {
    hint="Colar link do conteúdo";textSize=15f;setSingleLine(true)
    inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
    setTextColor(Color.rgb(24,36,56));setHintTextColor(muted)
-   setText(Regex("https?://[^\\\\s]+").find(sharedText)?.value.orEmpty())
+   setText(Regex("https?://[^\\s]+").find(sharedText)?.value.orEmpty())
   }
   contentCard.addView(contentInput)
   contentCard.addView(Button(this).apply{
