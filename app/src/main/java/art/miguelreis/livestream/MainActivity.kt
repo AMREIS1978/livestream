@@ -320,7 +320,14 @@ class MainActivity : Activity() {
   hint.addView(label("1  Escolhe partilhar o ecrã ou um link.\\n2  Autoriza a captura, se necessário.\\n3  Envia o convite.\\n4  Continua a utilizar o telemóvel.",14f))
   if(sharedText.isNotBlank())hint.addView(label("\\nRecebemos um conteúdo de outra aplicação. Podes iniciar a partilha agora.",13f,muted))
   root.addView(label("Pode partilhar o ecrã completo ou uma aplicação compatível. Vídeos protegidos podem surgir a preto. O microfone transmite voz quando ativado; a gravação MP4 ainda não inclui áudio.",12f,muted).apply {setPadding(0,dp(22),0,dp(8))})
+  val overlayOption=Button(this).apply{text="Sobrepor câmara a outras apps: "+if(overlayPrefs.getBoolean("allowOverlay",false))"SIM" else "NÃO";isAllCaps=false;setOnClickListener{
+   AlertDialog.Builder(this@MainActivity).setTitle("Sobrepor a todas as aplicações?")
+    .setPositiveButton("Sim"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",true).apply();text="Sobrepor câmara a outras apps: SIM";requestOverlayPermission()}
+    .setNegativeButton("Não"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",false).apply();text="Sobrepor câmara a outras apps: NÃO";if(live)startService(Intent(this@MainActivity,CaptureService::class.java).apply{action="CONTROL";putExtra("hideOverlay",true)})}.show()
+  }}
+  root.addView(overlayOption)
   setContentView(scroll)
+  scroll.post{askOverlayPreference()}
  }
 
  override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){
@@ -366,6 +373,7 @@ class MainActivity : Activity() {
     putExtra("saveAlongside",saveLiveCheck.isChecked)
     putExtra("micEnabled",micCheck.isChecked)
     putExtra("cameraMode",when(cameraMode.checkedRadioButtonId){3001->1;3002->2;else->0})
+    putExtra("overlayEnabled",overlayPrefs.getBoolean("allowOverlay",false))
    })
    status.text = if(saveLiveCheck.isChecked) "A transmitir e gravar · a estabelecer ligação" else "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
