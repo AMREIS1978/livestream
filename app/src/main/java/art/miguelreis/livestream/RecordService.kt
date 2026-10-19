@@ -35,7 +35,7 @@ class RecordService: Service() {
   if(data==null){stopSelf();return START_NOT_STICKY}
   try {
    val manager=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-   projection=manager.getMediaProjection(intent.getIntExtra("resultCode",Activity.RESULT_CANCELED),data)
+   projection=manager.getMediaProjection(intent?.getIntExtra("resultCode",Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED,data)
    projection?.registerCallback(object:MediaProjection.Callback(){override fun onStop(){stopSelf()}},Handler(Looper.getMainLooper()))
    val metrics=resources.displayMetrics
    val factor=(1920f/metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
