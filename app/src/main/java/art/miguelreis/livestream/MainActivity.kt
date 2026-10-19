@@ -401,7 +401,7 @@ class MainActivity : Activity() {
     putExtra("saveAlongside",saveLiveCheck.isChecked)
     putExtra("micEnabled",micCheck.isChecked)
     putExtra("cameraMode",when(cameraMode.checkedRadioButtonId){3001->1;3002->2;else->0})
-    putExtra("overlayEnabled",overlayPrefs.getBoolean("allowOverlay",false) && Settings.canDrawOverlays(this))
+    putExtra("overlayEnabled",overlayPrefs.getBoolean("allowOverlay",false) && Settings.canDrawOverlays(this@MainActivity))
    })
    status.text = if(saveLiveCheck.isChecked) "A transmitir e gravar · a estabelecer ligação" else "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
