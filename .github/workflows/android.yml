@@ -4,7 +4,34 @@ on:
     branches: [main]
   workflow_dispatch:
 jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    outputs:
+      relay_url: ${{ steps.worker.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Cloudflare credentials
+        id: auth
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish free Cloudflare Worker
+        if: steps.auth.outputs.ready == 'true'
+        id: worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: cloudflare
+          command: deploy
   build:
+    needs: deploy
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -22,9 +49,23 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build APK
+      - name: Resolve and verify relay
         env:
-          LIVESTREAM_SERVER_URL: ${{ vars.LIVESTREAM_SERVER_URL }}
+          DEPLOYED_URL: ${{ needs.deploy.outputs.relay_url }}
+          EXISTING_URL: ${{ vars.LIVESTREAM_SERVER_URL }}
+        run: |
+          URL="${DEPLOYED_URL:-$EXISTING_URL}"
+          URL="${URL%/}"
+          if [[ "$URL" != https://* ]]; then
+            echo "::error::No public HTTPS relay configured. Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets, or LIVESTREAM_SERVER_URL repository variable."
+            exit 1
+          fi
+          curl --fail --silent --show-error --location --max-time 20 "$URL/health" | grep -q '"ok":true' || {
+            echo "::error::Relay health check failed: $URL/health"
+            exit 1
+          }
+          echo "LIVESTREAM_SERVER_URL=$URL" >> "$GITHUB_ENV"
+      - name: Build APK
         run: gradle :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
