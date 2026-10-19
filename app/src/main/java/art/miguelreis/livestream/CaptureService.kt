@@ -23,6 +23,7 @@ class CaptureService: Service() {
  private val busy=AtomicBoolean(false)
  private var endpoint="";private var session="";private var publisherKey=""
  private var lastFrameAt=0L
+ private var captureThread:HandlerThread?=null
  override fun onBind(intent:Intent?)=null
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
@@ -39,34 +40,37 @@ class CaptureService: Service() {
   if(data==null){stopSelf();return START_NOT_STICKY}
   projection=mgr.getMediaProjection((intent?.getIntExtra("resultCode",Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED),data)
   val handler=Handler(Looper.getMainLooper())
+  captureThread=HandlerThread("LiveStreamCapture",android.os.Process.THREAD_PRIORITY_BACKGROUND).also { it.start() }
+  val captureHandler=Handler(captureThread!!.looper)
   projection?.registerCallback(object:MediaProjection.Callback(){override fun onStop(){stopSelf()}},handler)
   val metrics=resources.displayMetrics
-  val w=(metrics.widthPixels/2).coerceAtLeast(320);val h=(metrics.heightPixels/2).coerceAtLeast(320)
+  val scale=(720f / metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
+  val w=(metrics.widthPixels*scale).toInt().coerceAtLeast(2);val h=(metrics.heightPixels*scale).toInt().coerceAtLeast(2)
   reader=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2)
   reader?.setOnImageAvailableListener({ r ->
    val image=r.acquireLatestImage()?:return@setOnImageAvailableListener
    val now=android.os.SystemClock.elapsedRealtime()
-   if(now-lastFrameAt<700 || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
+   if(now-lastFrameAt<350 || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
    lastFrameAt=now
    try {
     val plane=image.planes[0];val pixelStride=plane.pixelStride;val rowStride=plane.rowStride
     val bmp=Bitmap.createBitmap(w+((rowStride-pixelStride*w)/pixelStride),h,Bitmap.Config.ARGB_8888)
     bmp.copyPixelsFromBuffer(plane.buffer)
     val cropped=Bitmap.createBitmap(bmp,0,0,w,h)
-    val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,55,out)
+    val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,48,out)
     val bytes=out.toByteArray();bmp.recycle();cropped.recycle()
     worker.execute { try {
      val conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
-     conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=5000;conn.readTimeout=5000
+     conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=2500;conn.readTimeout=2500
      conn.setRequestProperty("Content-Type","image/jpeg")
      conn.setRequestProperty("X-Publish-Key",publisherKey)
      conn.outputStream.use{it.write(bytes)}
-     conn.inputStream.close();conn.disconnect()
+     try { conn.inputStream.close() } finally { conn.disconnect() }
     } catch(_:Exception){} finally {busy.set(false)} }
    } catch(_:Exception){busy.set(false)} finally{image.close()}
-  },handler)
+  },captureHandler)
   display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)
   return START_NOT_STICKY
  }
- override fun onDestroy(){reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();worker.shutdownNow();super.onDestroy()}
+ override fun onDestroy(){reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();worker.shutdownNow();super.onDestroy()}
 }
