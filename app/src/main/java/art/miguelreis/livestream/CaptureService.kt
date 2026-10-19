@@ -35,6 +35,9 @@ class CaptureService: Service() {
  private var sharedText=""
  private var overlayManager:WindowManager?=null
  private var failures=0
+ private var jpegQuality=70
+ private var intervalMs=260L
+ private var lastUploadMs=0L
  private var lastHttpStatus=0
  private var lastError=""
  private var liveLabel:TextView?=null
@@ -89,18 +92,26 @@ class CaptureService: Service() {
   reader?.setOnImageAvailableListener({ r ->
    val image=r.acquireLatestImage()?:return@setOnImageAvailableListener
    val now=android.os.SystemClock.elapsedRealtime()
-   if(now-lastFrameAt<280 || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
+   if(now-lastFrameAt<intervalMs || !busy.compareAndSet(false,true)){image.close();return@setOnImageAvailableListener}
    lastFrameAt=now
    try {
     val plane=image.planes[0];val pixelStride=plane.pixelStride;val rowStride=plane.rowStride
     val bmp=Bitmap.createBitmap(rowStride/pixelStride,h,Bitmap.Config.ARGB_8888)
     bmp.copyPixelsFromBuffer(plane.buffer)
     val cropped=Bitmap.createBitmap(bmp,0,0,w,h)
-    val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,65,out)
+    val out=ByteArrayOutputStream()
+    var q=jpegQuality
+    do {
+     out.reset()
+     cropped.compress(Bitmap.CompressFormat.JPEG,q,out)
+     if(out.size()<=650000)break
+     q-=10
+    }while(q>=25)
     val bytes=out.toByteArray();bmp.recycle();cropped.recycle()
     if(bytes.size<100 || bytes.size>690000){lastError="Imagem demasiado grande";reportState(false);busy.set(false);return@setOnImageAvailableListener}
     worker.execute { try {
      var delivered=false
+     val started=android.os.SystemClock.elapsedRealtime()
      for(attempt in 0..1) {
       var conn:HttpURLConnection?=null
       try {
@@ -117,7 +128,19 @@ class CaptureService: Service() {
       }catch(e:Exception){lastError=e.javaClass.simpleName} finally {conn?.disconnect()}
       if(attempt==0) Thread.sleep(120)
      }
+     val duration=android.os.SystemClock.elapsedRealtime()-started
+     lastUploadMs=duration
      failures=if(delivered) 0 else (failures+1).coerceAtMost(100)
+     if(delivered && duration<350) {
+      jpegQuality=(jpegQuality+2).coerceAtMost(78)
+      intervalMs=220L
+     } else if(delivered && duration<800) {
+      jpegQuality=jpegQuality.coerceAtMost(68)
+      intervalMs=300L
+     } else {
+      jpegQuality=(jpegQuality-8).coerceAtLeast(30)
+      intervalMs=if(failures>2) 850L else 480L
+     }
      reportState(delivered)
     } catch(_:InterruptedException){Thread.currentThread().interrupt()} finally {busy.set(false)} }
    } catch(_:Exception){busy.set(false)} finally{image.close()}
