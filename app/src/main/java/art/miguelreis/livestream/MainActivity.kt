@@ -190,6 +190,7 @@ class MainActivity : Activity() {
   card.addView(cameraMode)
   previewLabel=label("Pré-visualização da câmara (apenas nesta página)",12f,muted)
   card.addView(previewLabel)
+  card.addView(label("A câmara aparece nesta página antes de começar e será incorporada no vídeo partilhado. Não é uma janela flutuante.",12f,muted))
   cameraPreview=CameraPreview(this).apply{visibility=android.view.View.GONE}
   card.addView(cameraPreview,LinearLayout.LayoutParams(-1,dp(190)))
   cameraMode.setOnCheckedChangeListener { _,selected ->
@@ -263,7 +264,7 @@ class MainActivity : Activity() {
   hint.addView(label("COMO FUNCIONA",12f,accent).apply {setPadding(0,0,0,dp(10))})
   hint.addView(label("1  Escolhe partilhar o ecrã ou um link.\\n2  Autoriza a captura, se necessário.\\n3  Envia o convite.\\n4  Continua a utilizar o telemóvel.",14f))
   if(sharedText.isNotBlank())hint.addView(label("\\nRecebemos um conteúdo de outra aplicação. Podes iniciar a partilha agora.",13f,muted))
-  root.addView(label("Pode partilhar o ecrã completo ou apenas uma aplicação compatível. Vídeos protegidos podem surgir a preto. Esta versão não transmite áudio.",12f,muted).apply {setPadding(0,dp(22),0,dp(8))})
+  root.addView(label("Pode partilhar o ecrã completo ou uma aplicação compatível. Vídeos protegidos podem surgir a preto. O microfone transmite voz quando ativado; a gravação MP4 ainda não inclui áudio.",12f,muted).apply {setPadding(0,dp(22),0,dp(8))})
   setContentView(scroll)
  }
 
