@@ -92,6 +92,7 @@ class MainActivity : Activity() {
  private fun stopRecording(){
   startService(Intent(this,RecordService::class.java).apply{action="STOP"})
   recordButton.isEnabled=true;stopRecordButton.isEnabled=false
+  startButton.isEnabled=true;saveLiveCheck.isEnabled=true
   Toast.makeText(this,"A guardar em Filmes / LiveStream",Toast.LENGTH_LONG).show()
  }
  private fun stopSharing() {
@@ -102,6 +103,7 @@ class MainActivity : Activity() {
   startButton.isEnabled = true
   saveLiveCheck.isEnabled=true
   recordButton.isEnabled=true
+  stopRecordButton.isEnabled=false
   stopButton.isEnabled = false
   inviteAction.isEnabled=false;copyAction.isEnabled=false
  }
@@ -224,6 +226,7 @@ class MainActivity : Activity() {
    if(resultCode==RESULT_OK && data!=null){
     startForegroundService(Intent(this,RecordService::class.java).apply{putExtra("resultCode",resultCode);putExtra("resultData",data)})
     recordButton.isEnabled=false;stopRecordButton.isEnabled=true
+    startButton.isEnabled=false;saveLiveCheck.isEnabled=false
     Toast.makeText(this,"Gravação iniciada",Toast.LENGTH_SHORT).show()
    }
    return
@@ -243,6 +246,7 @@ class MainActivity : Activity() {
    startButton.isEnabled = false
    saveLiveCheck.isEnabled=false
    recordButton.isEnabled=false
+   stopRecordButton.isEnabled=false
    stopButton.isEnabled = true
    inviteAction.isEnabled=true;copyAction.isEnabled=true
    sendInvite()
