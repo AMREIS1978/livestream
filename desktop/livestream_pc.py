@@ -27,6 +27,8 @@ class LiveStreamPC:
         self.running = threading.Event()
         self.recording = False
         self.thread = None
+        self.selected_monitor = 1
+        self.want_record = False
         self.session = ""
         self.key = ""
         self.video = None
@@ -69,8 +71,11 @@ class LiveStreamPC:
     def start(self):
         self.session = str(uuid.uuid4())
         self.key = secrets.token_hex(48)
+        self.selected_monitor = self.monitor_menu.current() + 1
+        self.want_record = self.record.get()
         self.running.set()
         self.start_btn.config(state="disabled")
+        self.monitor_menu.config(state="disabled")
         self.stop_btn.config(state="normal")
         self.copy_btn.config(state="normal")
         self.open_btn.config(state="normal")
@@ -82,8 +87,8 @@ class LiveStreamPC:
         recorder = None
         try:
             with mss.mss() as cap:
-                display = cap.monitors[self.monitor_menu.current() + 1]
-                if self.record.get():
+                display = cap.monitors[self.selected_monitor]
+                if self.want_record:
                     path = os.path.join(os.path.expanduser("~"), "Videos")
                     os.makedirs(path, exist_ok=True)
                     filename = os.path.join(path, f"LiveStream_{time.strftime('%Y%m%d_%H%M%S')}.mp4")
@@ -142,6 +147,7 @@ class LiveStreamPC:
         self.running.clear()
         self.stop_btn.config(state="disabled")
         self.start_btn.config(state="normal")
+        self.monitor_menu.config(state="readonly")
 
     def copy(self):
         if self.session:
