@@ -7,11 +7,15 @@ import android.media.projection.MediaProjectionManager
 import android.media.projection.MediaProjectionConfig
 import android.os.Bundle
 import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
 import android.widget.*
 import java.util.UUID
 
 class MainActivity : Activity() {
  private val requestCode = 123
+ private val microphoneRequestCode = 126
+ private lateinit var micCheck:CheckBox
  private val recordRequestCode = 125
  private lateinit var recordButton:Button
  private lateinit var stopRecordButton:Button
@@ -65,6 +69,10 @@ class MainActivity : Activity() {
  }
 
  private fun begin() {
+  if(micCheck.isChecked && checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){
+   requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),microphoneRequestCode)
+   return
+  }
   if (!endpoint.startsWith("https://")) {
    status.text = "Ligação ainda não configurada"
    AlertDialog.Builder(this)
@@ -97,6 +105,7 @@ class MainActivity : Activity() {
   status.text = if(saveLiveCheck.isChecked) "Partilha terminada · vídeo guardado em Filmes/LiveStream" else "Partilha terminada"
   startButton.isEnabled = true
   saveLiveCheck.isEnabled=true
+  micCheck.isEnabled=true
   for(i in 0 until captureMode.childCount)captureMode.getChildAt(i).isEnabled=Build.VERSION.SDK_INT>=34 || i==0
   recordButton.isEnabled=true
   stopRecordButton.isEnabled=false
@@ -158,6 +167,8 @@ class MainActivity : Activity() {
   card.addView(startButton,LinearLayout.LayoutParams(-1,dp(58)))
   saveLiveCheck=CheckBox(this).apply{text="Gravar também esta transmissão (MP4)";isChecked=false;setTextColor(Color.rgb(24,36,56))}
   card.addView(saveLiveCheck)
+  micCheck=CheckBox(this).apply{text="Transmitir som do microfone";isChecked=false;setTextColor(Color.rgb(24,36,56))}
+  card.addView(micCheck)
   stopButton=Button(this).apply {
    text="■  Parar transmissão";textSize=15f;isAllCaps=false;isEnabled=false
    setOnClickListener {stopSharing()}
@@ -224,6 +235,13 @@ class MainActivity : Activity() {
   setContentView(scroll)
  }
 
+ override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){
+  super.onRequestPermissionsResult(requestCode,permissions,grantResults)
+  if(requestCode==microphoneRequestCode){
+   if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED)begin()
+   else{micCheck.isChecked=false;Toast.makeText(this,"Microfone desativado",Toast.LENGTH_SHORT).show();begin()}
+  }
+ }
  override fun onDestroy(){try{unregisterReceiver(connectionReceiver)}catch(_:Exception){};super.onDestroy()}
  @Deprecated("Legacy activity result")
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -247,10 +265,12 @@ class MainActivity : Activity() {
     putExtra("publisherKey", publisherKey)
     putExtra("sharedText",sharedText)
     putExtra("saveAlongside",saveLiveCheck.isChecked)
+    putExtra("micEnabled",micCheck.isChecked)
    })
    status.text = if(saveLiveCheck.isChecked) "A transmitir e gravar · a estabelecer ligação" else "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
    saveLiveCheck.isEnabled=false
+   micCheck.isEnabled=false
    captureMode.isEnabled=false
    for(i in 0 until captureMode.childCount)captureMode.getChildAt(i).isEnabled=false
    recordButton.isEnabled=false
