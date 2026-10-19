@@ -9,6 +9,8 @@ import android.os.Bundle
 import android.os.Build
 import android.Manifest
 import android.content.pm.PackageManager
+import android.provider.Settings
+import android.net.Uri
 import android.widget.*
 import java.util.UUID
 
@@ -16,6 +18,7 @@ class MainActivity : Activity() {
  private val requestCode = 123
  private val microphoneRequestCode = 126
  private val cameraRequestCode = 127
+ private val overlayRequestCode = 128
  private lateinit var cameraMode:RadioGroup
  private lateinit var cameraPreview:CameraPreview
  private lateinit var placement:CameraPlacementView
@@ -82,6 +85,16 @@ class MainActivity : Activity() {
  }
 
  private fun begin() {
+  if(cameraMode.checkedRadioButtonId!=3000 && !Settings.canDrawOverlays(this)){
+   AlertDialog.Builder(this).setTitle("Controlar a câmara sobre outras aplicações")
+    .setMessage("Para arrastar, aumentar, diminuir e desligar a câmara enquanto utiliza outras aplicações, autorize o LiveStream a aparecer sobre outras apps. A autorização é opcional.")
+    .setPositiveButton("Autorizar"){_,_->startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")),overlayRequestCode)}
+    .setNegativeButton("Continuar sem janela"){_,_->beginWithoutOverlay()}.show()
+   return
+  }
+  beginWithoutOverlay()
+ }
+ private fun beginWithoutOverlay(){
   if(cameraMode.checkedRadioButtonId!=3000 && checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){
    requestPermissions(arrayOf(Manifest.permission.CAMERA),cameraRequestCode)
    return
@@ -160,7 +173,7 @@ class MainActivity : Activity() {
    setTypeface(null,android.graphics.Typeface.BOLD);setPadding(0,dp(16),0,dp(10))
   }
   root.addView(title)
-  root.addView(label("Partilhe o ecrã e explique com a sua imagem e voz.",15f,muted).apply {setPadding(0,0,0,dp(12))})
+  root.addView(label("Partilhe o ecrã e explique com a sua imagem e voz. Durante a transmissão, arraste a janela do apresentador sobre qualquer aplicação.",15f,muted).apply {setPadding(0,0,0,dp(12))})
   val card=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL;background=rounded(cardColor)
    setPadding(dp(20),dp(20),dp(20),dp(20))
@@ -315,6 +328,10 @@ class MainActivity : Activity() {
  @Deprecated("Legacy activity result")
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
   super.onActivityResult(requestCode, resultCode, data)
+  if(requestCode==overlayRequestCode){
+   if(Settings.canDrawOverlays(this))Toast.makeText(this,"Controlo flutuante autorizado",Toast.LENGTH_SHORT).show()
+   beginWithoutOverlay();return
+  }
   if(requestCode==recordRequestCode){
    if(resultCode==RESULT_OK && data!=null){
     startForegroundService(Intent(this,RecordService::class.java).apply{putExtra("resultCode",resultCode);putExtra("resultData",data)})
