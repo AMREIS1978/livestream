@@ -50,7 +50,9 @@ class RecordService: Service() {
    output=contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI,values)
    file=output?.let{contentResolver.openFileDescriptor(it,"w")}
    val fd=file?.fileDescriptor ?: throw IllegalStateException("Não foi possível abrir o ficheiro")
-   recorder=if(Build.VERSION.SDK_INT>=31)MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()
+   @Suppress("DEPRECATION")
+   val mr=if(Build.VERSION.SDK_INT>=31)MediaRecorder(this) else MediaRecorder()
+   recorder=mr
    recorder!!.apply {
     setVideoSource(MediaRecorder.VideoSource.SURFACE)
     setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
