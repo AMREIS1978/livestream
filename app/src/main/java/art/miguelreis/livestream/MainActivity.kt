@@ -17,6 +17,8 @@ class MainActivity : Activity() {
  private val microphoneRequestCode = 126
  private val cameraRequestCode = 127
  private lateinit var cameraMode:RadioGroup
+ private lateinit var cameraPreview:CameraPreview
+ private lateinit var previewLabel:TextView
  private lateinit var micCheck:CheckBox
  private val recordRequestCode = 125
  private lateinit var recordButton:Button
@@ -89,6 +91,7 @@ class MainActivity : Activity() {
   }
   session = UUID.randomUUID().toString()
   publisherKey = UUID.randomUUID().toString() + UUID.randomUUID().toString()
+  cameraPreview.stop()
   shareEntireScreen = captureMode.checkedRadioButtonId == 2001
   val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
   startActivityForResult(if(Build.VERSION.SDK_INT>=34 && shareEntireScreen)mgr.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()) else mgr.createScreenCaptureIntent(), requestCode)
@@ -116,6 +119,7 @@ class MainActivity : Activity() {
   for(i in 0 until captureMode.childCount)captureMode.getChildAt(i).isEnabled=Build.VERSION.SDK_INT>=34 || i==0
   recordButton.isEnabled=true
   stopRecordButton.isEnabled=false
+  if(cameraMode.checkedRadioButtonId!=3000 && checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){cameraPreview.visibility=android.view.View.VISIBLE;cameraPreview.showCamera(cameraMode.checkedRadioButtonId==3001)}
   stopButton.isEnabled = false
   inviteAction.isEnabled=false;copyAction.isEnabled=false
  }
@@ -184,6 +188,19 @@ class MainActivity : Activity() {
    addView(RadioButton(this@MainActivity).apply{id=3002;text="Câmara traseira";setTextColor(Color.rgb(24,36,56))})
   }
   card.addView(cameraMode)
+  previewLabel=label("Pré-visualização da câmara (apenas nesta página)",12f,muted)
+  card.addView(previewLabel)
+  cameraPreview=CameraPreview(this).apply{visibility=android.view.View.GONE}
+  card.addView(cameraPreview,LinearLayout.LayoutParams(-1,dp(190)))
+  cameraMode.setOnCheckedChangeListener { _,selected ->
+   cameraPreview.stop()
+   if(selected==3000){cameraPreview.visibility=android.view.View.GONE;previewLabel.text="Câmara desligada"}
+   else if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){
+    cameraPreview.visibility=android.view.View.VISIBLE
+    previewLabel.text=if(selected==3001)"Pré-visualização · câmara frontal" else "Pré-visualização · câmara traseira"
+    cameraPreview.showCamera(selected==3001)
+   }else{previewLabel.text="Autorize a câmara para ver a pré-visualização";requestPermissions(arrayOf(Manifest.permission.CAMERA),cameraRequestCode)}
+  }
   stopButton=Button(this).apply {
    text="■  Parar transmissão";textSize=15f;isAllCaps=false;isEnabled=false
    setOnClickListener {stopSharing()}
@@ -253,15 +270,16 @@ class MainActivity : Activity() {
  override fun onRequestPermissionsResult(requestCode:Int,permissions:Array<out String>,grantResults:IntArray){
   super.onRequestPermissionsResult(requestCode,permissions,grantResults)
   if(requestCode==cameraRequestCode){
-   if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED)begin()
-   else{cameraMode.check(3000);Toast.makeText(this,"Câmara desativada",Toast.LENGTH_SHORT).show();begin()}
+   if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED){
+    if(cameraMode.checkedRadioButtonId!=3000){cameraPreview.visibility=android.view.View.VISIBLE;cameraPreview.showCamera(cameraMode.checkedRadioButtonId==3001)}
+   }else{cameraMode.check(3000);Toast.makeText(this,"Câmara desativada",Toast.LENGTH_SHORT).show()}
   }
   if(requestCode==microphoneRequestCode){
    if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED)begin()
    else{micCheck.isChecked=false;Toast.makeText(this,"Microfone desativado",Toast.LENGTH_SHORT).show();begin()}
   }
  }
- override fun onDestroy(){try{unregisterReceiver(connectionReceiver)}catch(_:Exception){};super.onDestroy()}
+ override fun onDestroy(){cameraPreview.release();try{unregisterReceiver(connectionReceiver)}catch(_:Exception){};super.onDestroy()}
  @Deprecated("Legacy activity result")
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
   super.onActivityResult(requestCode, resultCode, data)
@@ -276,6 +294,7 @@ class MainActivity : Activity() {
   }
   if (requestCode != this.requestCode) return
   if (resultCode == RESULT_OK && data != null) {
+   cameraPreview.stop()
    startForegroundService(Intent(this, CaptureService::class.java).apply {
     putExtra("resultCode", resultCode)
     putExtra("resultData", data)
