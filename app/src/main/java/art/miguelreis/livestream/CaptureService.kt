@@ -98,7 +98,7 @@ class CaptureService: Service() {
     val cropped=Bitmap.createBitmap(bmp,0,0,w,h)
     val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,48,out)
     val bytes=out.toByteArray();bmp.recycle();cropped.recycle()
-    if(bytes.size<100 || bytes.size>690000){busy.set(false);image.close();return@setOnImageAvailableListener}
+    if(bytes.size<100 || bytes.size>690000){busy.set(false);return@setOnImageAvailableListener}
     worker.execute { try {
      var delivered=false
      for(attempt in 0..1) {
