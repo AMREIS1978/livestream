@@ -211,6 +211,7 @@ class MainActivity : Activity() {
   }
   card.addView(label("PARTILHAR",12f,muted).apply{setPadding(0,0,0,dp(6))})
   card.addView(captureMode)
+  for(i in 0 until captureMode.childCount){(captureMode.getChildAt(i) as? RadioButton)?.buttonTintList=android.content.res.ColorStateList.valueOf(accent)}
   if(Build.VERSION.SDK_INT<34){
    captureMode.findViewById<RadioButton>(2002).isEnabled=false
    card.addView(label("A seleção de uma única aplicação requer Android 14 ou superior.",12f,muted))
@@ -219,10 +220,12 @@ class MainActivity : Activity() {
   saveLiveCheck=CheckBox(this).apply{text="Guardar gravação MP4";isChecked=false;setTextColor(Color.WHITE)}
   card.addView(saveLiveCheck)
   saveLiveCheck.visibility=android.view.View.GONE
-  micCheck=CheckBox(this).apply{text="Microfone";isChecked=false;setTextColor(Color.rgb(24,36,56))}
+  micCheck=CheckBox(this).apply{text="Microfone";isChecked=false;setTextColor(Color.WHITE)}
   micCheck.setOnCheckedChangeListener { _,checked ->
    if(checked && checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),microphoneRequestCode)}else updateLiveControls()
   }
+  micCheck.setTextColor(Color.WHITE)
+  micCheck.buttonTintList=android.content.res.ColorStateList.valueOf(accent)
   root.addView(micCheck)
   val cameraHero=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=rounded(cardColor);setPadding(dp(14),dp(12),dp(14),dp(14))}
   root.addView(cameraHero)
@@ -230,11 +233,12 @@ class MainActivity : Activity() {
   cameraHero.addView(label("Câmara opcional · podes alterar durante a transmissão.",12f,muted))
   cameraMode=RadioGroup(this).apply{
    orientation=RadioGroup.VERTICAL
-   addView(RadioButton(this@MainActivity).apply{id=3000;text="Desligada";isChecked=true;setTextColor(Color.rgb(24,36,56))})
-   addView(RadioButton(this@MainActivity).apply{id=3001;text="Câmara frontal";setTextColor(Color.rgb(24,36,56))})
-   addView(RadioButton(this@MainActivity).apply{id=3002;text="Câmara traseira";setTextColor(Color.rgb(24,36,56))})
+   addView(RadioButton(this@MainActivity).apply{id=3000;text="Desligada";isChecked=true;setTextColor(Color.WHITE)})
+   addView(RadioButton(this@MainActivity).apply{id=3001;text="Câmara frontal";setTextColor(Color.WHITE)})
+   addView(RadioButton(this@MainActivity).apply{id=3002;text="Câmara traseira";setTextColor(Color.WHITE)})
   }
   cameraHero.addView(cameraMode)
+  for(i in 0 until cameraMode.childCount){(cameraMode.getChildAt(i) as? RadioButton)?.buttonTintList=android.content.res.ColorStateList.valueOf(accent)}
   previewLabel=label("Pré-visualização da câmara (apenas nesta página)",12f,muted)
   cameraHero.addView(previewLabel)
 
@@ -314,7 +318,7 @@ class MainActivity : Activity() {
   contentInput=EditText(this).apply{
    hint="Colar link do conteúdo";textSize=15f;setSingleLine(true)
    inputType=android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
-   setTextColor(Color.rgb(24,36,56));setHintTextColor(muted)
+   setTextColor(Color.WHITE);setHintTextColor(muted)
    setText(Regex("https?://[^\\s]+").find(sharedText)?.value.orEmpty())
   }
   contentCard.addView(contentInput)
@@ -332,12 +336,13 @@ class MainActivity : Activity() {
   hint.addView(label("1  Escolhe partilhar o ecrã ou um link.\\n2  Autoriza a captura, se necessário.\\n3  Envia o convite.\\n4  Continua a utilizar o telemóvel.",14f))
   if(sharedText.isNotBlank())hint.addView(label("\\nRecebemos um conteúdo de outra aplicação. Podes iniciar a partilha agora.",13f,muted))
   root.addView(label("Pode partilhar o ecrã completo ou uma aplicação compatível. Vídeos protegidos podem surgir a preto. O microfone transmite voz quando ativado; a gravação MP4 ainda não inclui áudio.",12f,muted).apply {setPadding(0,dp(22),0,dp(8))})
-  val overlayOption=Button(this).apply{text="Janela sobre outras apps: "+if(overlayPrefs.getBoolean("allowOverlay",false))"SIM" else "NÃO";isAllCaps=false;setOnClickListener{
+  val overlayOption=Button(this).apply{text="Controlos sobre outras apps: "+if(overlayPrefs.getBoolean("allowOverlay",false))"SIM" else "NÃO";setTextColor(Color.WHITE);backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(48,56,77));isAllCaps=false;setOnClickListener{
    AlertDialog.Builder(this@MainActivity).setTitle("Sobrepor a todas as aplicações?")
-    .setPositiveButton("Sim"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",true).apply();text="Sobrepor câmara a outras apps: SIM";requestOverlayPermission()}
-    .setNegativeButton("Não"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",false).apply();text="Sobrepor câmara a outras apps: NÃO";if(live)startService(Intent(this@MainActivity,CaptureService::class.java).apply{action="CONTROL";putExtra("hideOverlay",true)})}.show()
+    .setPositiveButton("Sim"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",true).apply();text="Controlos sobre outras apps: SIM";requestOverlayPermission();if(live && Settings.canDrawOverlays(this@MainActivity))startService(Intent(this@MainActivity,CaptureService::class.java).apply{action="CONTROL";putExtra("overlayEnabled",true);putExtra("showOverlay",true)})}
+    .setNegativeButton("Não"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",false).apply();text="Controlos sobre outras apps: NÃO";if(live)startService(Intent(this@MainActivity,CaptureService::class.java).apply{action="CONTROL";putExtra("overlayEnabled",false);putExtra("hideOverlay",true)})}.show()
   }}
   root.addView(overlayOption)
+  root.addView(label("Durante a transmissão, arraste a janela para mover a imagem. Use + / − para ajustar, o microfone para falar e TERMINAR para parar.",13f,muted))
   setContentView(scroll)
   // Do not interrupt screen sharing with a permissions dialog at app launch.
  }
@@ -363,6 +368,7 @@ class MainActivity : Activity() {
   if(requestCode==overlayRequestCode){
    Toast.makeText(this,if(Settings.canDrawOverlays(this))"Janela do apresentador autorizada" else "Sobreposição não autorizada",Toast.LENGTH_SHORT).show()
    if(awaitingOverlay && pendingStart){awaitingOverlay=false;beginWithoutOverlay()}
+   else if(live && Settings.canDrawOverlays(this) && overlayPrefs.getBoolean("allowOverlay",false)){startService(Intent(this,CaptureService::class.java).apply{action="CONTROL";putExtra("overlayEnabled",true);putExtra("showOverlay",true)})}
    return
   }
   if(requestCode==recordRequestCode){
