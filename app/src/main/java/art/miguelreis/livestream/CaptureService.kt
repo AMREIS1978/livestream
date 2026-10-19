@@ -33,6 +33,13 @@ class CaptureService: Service() {
  @Volatile private var micEnabled=false
  @Volatile private var cameraMode=0
  private var cameraInset:CameraInset?=null
+ private var presenterOverlay:PresenterOverlay?=null
+ private fun setCamera(next:Int){
+  if(next==cameraMode)return
+  cameraInset?.stop();cameraInset=null;cameraMode=next
+  if(next!=0 && checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){cameraInset=CameraInset(this,next==1).also{if(!it.start())cameraInset=null}}
+  configureCamera();presenterOverlay?.refresh()
+ }
  private var cameraX=.78f
  private var cameraY=.14f
  private var cameraSize=.26f
@@ -74,9 +81,11 @@ class CaptureService: Service() {
    cameraSize=intent.getFloatExtra("cameraSize",cameraSize).coerceIn(.14f,.50f)
    val nextCamera=intent.getIntExtra("cameraMode",cameraMode)
    val nextMic=intent.getBooleanExtra("micEnabled",micEnabled)
-   if(nextCamera!=cameraMode){cameraInset?.stop();cameraInset=null;cameraMode=nextCamera;if(cameraMode!=0 && checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start())cameraInset=null}}}
+   if(nextCamera!=cameraMode)setCamera(nextCamera)
    configureCamera()
    if(nextMic!=micEnabled){micEnabled=nextMic;if(micEnabled && checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startMicrophone() else stopMicrophone()}
+   if(intent.getBooleanExtra("showOverlay",false))showPresenterOverlay()
+   if(intent.getBooleanExtra("hideOverlay",false))presenterOverlay?.hide()
    return START_NOT_STICKY
   }
   if(projection!=null)return START_NOT_STICKY
@@ -193,9 +202,17 @@ class CaptureService: Service() {
   if(micEnabled)startMicrophone()
   if(cameraMode!=0){try{cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start()){cameraInset=null;lastError="Câmara indisponível"}}}catch(_:Exception){cameraInset=null;lastError="Câmara não disponível"}}
   configureCamera()
+  if(cameraMode!=0)showPresenterOverlay()
   reportState(false)
   return START_NOT_STICKY
  }
+  private fun showPresenterOverlay(){
+   if(cameraMode==0 || !Settings.canDrawOverlays(this))return
+   if(presenterOverlay==null)presenterOverlay=PresenterOverlay(this,{cameraInset},{micEnabled},{
+    if(micEnabled){micEnabled=false;stopMicrophone()}else if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){micEnabled=true;startMicrophone()}
+   },{setCamera(if(cameraMode==1)2 else 1)},{setCamera(0)},{x,y,size->cameraX=x;cameraY=y;cameraSize=size;configureCamera()})
+   presenterOverlay?.show()
+  }
   private fun stopMicrophone(){audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();audioThread=null}
   private fun startMicrophone(){
   if(audioRunning)return
@@ -228,5 +245,5 @@ class CaptureService: Service() {
    },"LiveStreamAudio").apply{isDaemon=true;start()}
   }catch(_:Exception){audioRunning=false}
  }
- override fun onDestroy(){if(lastError.isBlank())lastError="Transmissão terminada";reportState(false);cameraInset?.stop();cameraInset=null;stopMicrophone();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();networkWorker.shutdownNow();super.onDestroy()}
+ override fun onDestroy(){presenterOverlay?.hide();presenterOverlay=null;if(lastError.isBlank())lastError="Transmissão terminada";reportState(false);cameraInset?.stop();cameraInset=null;stopMicrophone();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();networkWorker.shutdownNow();super.onDestroy()}
 }
