@@ -14,6 +14,9 @@ import java.util.UUID
 class MainActivity : Activity() {
  private val requestCode = 123
  private val overlayRequestCode = 124
+ private val recordRequestCode = 125
+ private lateinit var recordButton:Button
+ private lateinit var stopRecordButton:Button
  private var overlayPrompted = false
  private lateinit var status: TextView
  private lateinit var startButton: Button
@@ -81,6 +84,15 @@ class MainActivity : Activity() {
   startActivityForResult(mgr.createScreenCaptureIntent(), requestCode)
  }
 
+ private fun beginRecording(){
+  val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+  startActivityForResult(mgr.createScreenCaptureIntent(),recordRequestCode)
+ }
+ private fun stopRecording(){
+  startService(Intent(this,RecordService::class.java).apply{action="STOP"})
+  recordButton.isEnabled=true;stopRecordButton.isEnabled=false
+  Toast.makeText(this,"A guardar em Filmes / LiveStream",Toast.LENGTH_LONG).show()
+ }
  private fun stopSharing() {
   startService(Intent(this, CaptureService::class.java).apply { action = "STOP" })
   session = ""
@@ -151,6 +163,23 @@ class MainActivity : Activity() {
   actions.addView(inviteButton,LinearLayout.LayoutParams(0,dp(54),1f))
   actions.addView(copyButton,LinearLayout.LayoutParams(0,dp(54),1f).apply {marginStart=dp(8)})
   inviteAction=inviteButton;copyAction=copyButton
+  val recordCard=LinearLayout(this).apply {
+   orientation=LinearLayout.VERTICAL;background=rounded(cardColor)
+   setPadding(dp(18),dp(18),dp(18),dp(18))
+  }
+  root.addView(recordCard,LinearLayout.LayoutParams(-1,-2).apply{topMargin=dp(24)})
+  recordCard.addView(label("Gravar ecrã",21f).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
+  recordCard.addView(label("Guarda um vídeo MP4 no telemóvel, sem ligação à internet e sem custos. Sem áudio nesta versão.",13f,muted).apply{setPadding(0,dp(8),0,dp(10))})
+  recordButton=Button(this).apply{
+   text="●  Começar gravação";isAllCaps=false
+   setOnClickListener{beginRecording()}
+  }
+  recordCard.addView(recordButton,LinearLayout.LayoutParams(-1,dp(52)))
+  stopRecordButton=Button(this).apply{
+   text="■  Parar e guardar";isAllCaps=false;isEnabled=false
+   setOnClickListener{stopRecording()}
+  }
+  recordCard.addView(stopRecordButton,LinearLayout.LayoutParams(-1,dp(52)))
   val contentCard=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL;background=rounded(cardColor)
    setPadding(dp(18),dp(18),dp(18),dp(18))
@@ -186,6 +215,14 @@ class MainActivity : Activity() {
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
   super.onActivityResult(requestCode, resultCode, data)
   if(requestCode==overlayRequestCode){begin();return}
+  if(requestCode==recordRequestCode){
+   if(resultCode==RESULT_OK && data!=null){
+    startForegroundService(Intent(this,RecordService::class.java).apply{putExtra("resultCode",resultCode);putExtra("resultData",data)})
+    recordButton.isEnabled=false;stopRecordButton.isEnabled=true
+    Toast.makeText(this,"Gravação iniciada",Toast.LENGTH_SHORT).show()
+   }
+   return
+  }
   if (requestCode != this.requestCode) return
   if (resultCode == RESULT_OK && data != null) {
    startForegroundService(Intent(this, CaptureService::class.java).apply {
