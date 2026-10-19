@@ -4,11 +4,11 @@ android {
  namespace = "art.miguelreis.livestream"
  compileSdk = 35
  defaultConfig {
-  applicationId = "art.miguelreis.livestream.duo"
+  applicationId = "pt.miguelreis.olharlive"
   minSdk = 29
   targetSdk = 35
-  versionCode = 22
-  versionName = "1.8.1"
+  versionCode = 1
+  versionName = "1.0.0"
   buildConfigField("String", "RELAY_URL", "\""+relayUrl.replace("\\","\\\\").replace("\"","\\\"")+"\"")
  }
  buildFeatures { buildConfig = true }
