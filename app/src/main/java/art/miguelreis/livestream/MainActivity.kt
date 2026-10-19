@@ -107,7 +107,7 @@ class MainActivity : Activity() {
   fun label(value:String,size:Float,color:Int=Color.rgb(24,36,56))=TextView(this).apply {
    text=value;textSize=size;setTextColor(color)
   }
-  val scroll=ScrollView(this).apply {fillViewport=true;setBackgroundColor(navy)}
+  val scroll=ScrollView(this).apply {isFillViewport=true;setBackgroundColor(navy)}
   val root=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL;setPadding(dp(22),dp(32),dp(22),dp(24))
   }
