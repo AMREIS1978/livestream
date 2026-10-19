@@ -23,12 +23,13 @@ class PresenterOverlay(
  private val onToggleMic:()->Unit,
  private val onFlip:()->Unit,
  private val onHide:()->Unit,
+ private val onStop:()->Unit,
  private val onMove:(Float,Float,Float)->Unit
 ){
  private val wm=context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
  private val dp=context.resources.displayMetrics.density
  private var width=(154*dp).toInt()
- private var height=(292*dp).toInt()
+ private var height=(270*dp).toInt()
  private var root:LinearLayout?=null
  private var params:WindowManager.LayoutParams?=null
  private var image:View?=null
@@ -44,14 +45,15 @@ class PresenterOverlay(
   if(root!=null || !Settings.canDrawOverlays(context))return
   val box=LinearLayout(context).apply{
    orientation=LinearLayout.VERTICAL
-   background=GradientDrawable().apply{setColor(Color.rgb(12,19,34));cornerRadius=19*dp;setStroke((2*dp).toInt(),Color.rgb(52,128,244))}
+   background=GradientDrawable().apply{setColor(Color.TRANSPARENT);cornerRadius=16*dp}
    clipToOutline=true
   }
   val bar=TextView(context).apply{
-   text="⠿  LIVE  ·  ARRASTAR"
+   text="● LIVE    ·    MOVER"
    textSize=10f
    setTextColor(Color.WHITE)
    gravity=Gravity.CENTER
+   background=GradientDrawable().apply{setColor(Color.rgb(27,44,69));cornerRadius=10*dp}
    setPadding(4,6,4,6)
   }
   box.addView(bar,LinearLayout.LayoutParams(-1,(32*dp).toInt()))
@@ -59,7 +61,7 @@ class PresenterOverlay(
    private val paint=Paint(Paint.ANTI_ALIAS_FLAG)
    override fun onDraw(canvas:Canvas){
     super.onDraw(canvas)
-    canvas.drawColor(Color.rgb(30,41,59))
+    canvas.drawColor(Color.TRANSPARENT,android.graphics.PorterDuff.Mode.CLEAR)
     val camera=getCamera()
     if(camera!=null)camera.drawPreview(canvas,this.width,this.height)
     else{
@@ -84,6 +86,10 @@ class PresenterOverlay(
   controls.addView(button("+"){resize(24)},LinearLayout.LayoutParams(0,(42*dp).toInt(),1f))
   controls.addView(button("×"){onHide();hide()},LinearLayout.LayoutParams(0,(42*dp).toInt(),1f))
   box.addView(controls)
+  val stopButton=button("■  TERMINAR TRANSMISSÃO"){onStop()}.apply{
+   setTextColor(Color.WHITE);backgroundTintList=android.content.res.ColorStateList.valueOf(Color.rgb(196,46,57));textSize=12f
+  }
+  box.addView(stopButton,LinearLayout.LayoutParams(-1,(37*dp).toInt()))
   val lp=WindowManager.LayoutParams(width,height,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_SECURE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
    android.graphics.PixelFormat.TRANSLUCENT)
@@ -112,7 +118,7 @@ class PresenterOverlay(
   val lp=params?:return
   val box=root?:return
   val newWidth=(lp.width+(change*dp).toInt()).coerceIn((112*dp).toInt(),(context.resources.displayMetrics.widthPixels*.48f).toInt())
-  lp.width=newWidth;lp.height=(newWidth*1.90f).toInt()
+  lp.width=newWidth;lp.height=(newWidth*1.85f).toInt()
   lp.x=lp.x.coerceIn(0,(context.resources.displayMetrics.widthPixels-lp.width).coerceAtLeast(0))
   lp.y=lp.y.coerceIn(0,(context.resources.displayMetrics.heightPixels-lp.height).coerceAtLeast(0))
   try{wm.updateViewLayout(box,lp)}catch(_:Exception){}
