@@ -27,6 +27,7 @@ class MainActivity : Activity() {
  private var publisherKey = ""
  private var sharedText = ""
  private lateinit var contentInput:EditText
+ private lateinit var saveLiveCheck:CheckBox
  private fun shareContent(){
   val raw=contentInput.text.toString().trim()
   if(raw.isBlank()){Toast.makeText(this,"Cole primeiro o link do conteúdo",Toast.LENGTH_SHORT).show();return}
@@ -97,8 +98,10 @@ class MainActivity : Activity() {
   startService(Intent(this, CaptureService::class.java).apply { action = "STOP" })
   session = ""
   publisherKey = ""
-  status.text = "Partilha terminada"
+  status.text = if(saveLiveCheck.isChecked) "Partilha terminada · vídeo guardado em Filmes/LiveStream" else "Partilha terminada"
   startButton.isEnabled = true
+  saveLiveCheck.isEnabled=true
+  recordButton.isEnabled=true
   stopButton.isEnabled = false
   inviteAction.isEnabled=false;copyAction.isEnabled=false
  }
@@ -144,6 +147,8 @@ class MainActivity : Activity() {
    setOnClickListener {begin()}
   }
   card.addView(startButton,LinearLayout.LayoutParams(-1,dp(58)))
+  saveLiveCheck=CheckBox(this).apply{text="Gravar também esta transmissão (MP4)";isChecked=false;setTextColor(Color.rgb(24,36,56))}
+  card.addView(saveLiveCheck)
   stopButton=Button(this).apply {
    text="■  Parar transmissão";textSize=15f;isAllCaps=false;isEnabled=false
    setOnClickListener {stopSharing()}
@@ -232,9 +237,12 @@ class MainActivity : Activity() {
     putExtra("session", session)
     putExtra("publisherKey", publisherKey)
     putExtra("sharedText",sharedText)
+    putExtra("saveAlongside",saveLiveCheck.isChecked)
    })
-   status.text = "Captura iniciada · a estabelecer ligação"
+   status.text = if(saveLiveCheck.isChecked) "A transmitir e gravar · a estabelecer ligação" else "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
+   saveLiveCheck.isEnabled=false
+   recordButton.isEnabled=false
    stopButton.isEnabled = true
    inviteAction.isEnabled=true;copyAction.isEnabled=true
    sendInvite()
