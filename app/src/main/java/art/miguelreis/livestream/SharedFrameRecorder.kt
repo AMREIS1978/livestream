@@ -96,7 +96,7 @@ class SharedFrameRecorder(private val context:Context,private val width:Int,priv
    val index=c.dequeueInputBuffer(100000)
    if(index>=0)c.queueInputBuffer(index,0,0,(SystemClock.elapsedRealtime()-startedAt)*1000L,MediaCodec.BUFFER_FLAG_END_OF_STREAM)
   }
-  repeat(if(end)80 else 8){
+  for(attempt in 0 until (if(end)80 else 8)){
    val index=c.dequeueOutputBuffer(info,if(end)50000 else 0)
    if(index==MediaCodec.INFO_OUTPUT_FORMAT_CHANGED){
     if(!muxerStarted){track=muxer!!.addTrack(c.outputFormat);muxer!!.start();muxerStarted=true}
@@ -108,8 +108,8 @@ class SharedFrameRecorder(private val context:Context,private val width:Int,priv
     }
     val eos=(info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM)!=0
     c.releaseOutputBuffer(index,false)
-    if(eos)return
-   }else if(!end)return
+    if(eos)break
+   }else if(!end)break
   }
  }
  fun finish(save:Boolean=true){
