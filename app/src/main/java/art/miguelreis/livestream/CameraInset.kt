@@ -32,6 +32,10 @@ class CameraInset(private val context:Context, private val front:Boolean) {
  private var session:CameraCaptureSession?=null
  private var reader:ImageReader?=null
  @Volatile private var closed=false
+ @Volatile var positionX=0.78f
+ @Volatile var positionY=0.14f
+ @Volatile var sizeFraction=0.26f
+ private var sensorOrientation=0
 
  fun start():Boolean {
   if(context.checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)return false
@@ -41,6 +45,7 @@ class CameraInset(private val context:Context, private val front:Boolean) {
    val id=manager.cameraIdList.firstOrNull {
     manager.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING)==facing
    }?:return false
+   sensorOrientation=manager.getCameraCharacteristics(id).get(CameraCharacteristics.SENSOR_ORIENTATION)?:0
    thread.start()
    handler=Handler(thread.looper)
    reader=ImageReader.newInstance(320,240,ImageFormat.JPEG,2).apply {
@@ -50,7 +55,12 @@ class CameraInset(private val context:Context, private val front:Boolean) {
       val buffer=image.planes[0].buffer
       val data=ByteArray(buffer.remaining());buffer.get(data)
       val bitmap=BitmapFactory.decodeByteArray(data,0,data.size)
-      if(bitmap!=null){synchronized(frameLock){latest.getAndSet(bitmap)?.recycle()}}
+      if(bitmap!=null){
+       val rotation=Matrix().apply{postRotate(sensorOrientation.toFloat());if(front)postScale(-1f,1f)}
+       val oriented=try{Bitmap.createBitmap(bitmap,0,0,bitmap.width,bitmap.height,rotation,true)}catch(_:Exception){bitmap}
+       if(oriented!==bitmap)bitmap.recycle()
+       synchronized(frameLock){latest.getAndSet(oriented)?.recycle()}
+      }
      }catch(_:Exception){}finally{image.close()}
     },handler)
    }
@@ -86,25 +96,15 @@ class CameraInset(private val context:Context, private val front:Boolean) {
   if(inset.isRecycled)return
   try {
    val canvas=Canvas(target)
-   // Reserve a separate column for the presenter instead of covering screen content.
-   val strip=(target.width*.30f).toInt().coerceAtLeast(80)
-   val contentWidth=target.width-strip
-   val original=target.copy(Bitmap.Config.ARGB_8888,false)
-   try{
-    canvas.drawColor(Color.rgb(15,23,42))
-    val content=Rect(0,0,contentWidth,target.height)
-    canvas.drawBitmap(original,null,content,Paint(Paint.FILTER_BITMAP_FLAG))
-    val insetHeight=(strip*4/3).coerceAtMost(target.height/2)
-    val top=(target.height-insetHeight)/2
-    val destination=Rect(contentWidth+4,top,target.width-4,top+insetHeight)
-    val paint=Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    if(front){
-     canvas.save()
-     canvas.scale(-1f,1f,destination.exactCenterX(),destination.exactCenterY())
-     canvas.drawBitmap(inset,null,destination,paint)
-     canvas.restore()
-    }else canvas.drawBitmap(inset,null,destination,paint)
-   }finally{original.recycle()}
+   // Overlay with preserved screen geometry; camera is rotated at capture time.
+   val width=(target.width*sizeFraction.coerceIn(.14f,.50f)).toInt().coerceAtLeast(64)
+   val height=(width*inset.height.toFloat()/inset.width).toInt().coerceAtLeast(64).coerceAtMost(target.height/2)
+   val left=((target.width-width)*positionX.coerceIn(0f,1f)).toInt()
+   val top=((target.height-height)*positionY.coerceIn(0f,1f)).toInt()
+   val dst=Rect(left,top,left+width,top+height)
+   val border=Paint(Paint.ANTI_ALIAS_FLAG).apply{color=Color.WHITE}
+   canvas.drawRoundRect(left-3f,top-3f,(left+width+3).toFloat(),(top+height+3).toFloat(),10f,10f,border)
+   canvas.drawBitmap(inset,null,dst,Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
   }catch(_:Exception){}
   }
  }
