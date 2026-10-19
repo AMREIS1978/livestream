@@ -17,7 +17,7 @@ jobs:
           if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Cloudflare deployment secrets are missing"
+            echo "::error::Missing CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID repository secrets. Add both under Settings > Secrets and variables > Actions > Repository secrets."
             exit 1
           fi
       - name: Deploy LiveStream Worker
