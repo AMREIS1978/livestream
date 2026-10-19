@@ -27,7 +27,7 @@ footer{color:#b7c1d2;font-size:13px;display:flex;align-items:center;justify-cont
 <footer><span id="state" role="status">A ligar…</span><span>Som opcional · ESC para sair do ecrã inteiro</span></footer></main>
 <script>
 const id=${JSON.stringify(id)};
-let etag='',currentUrl='',running=false;
+let etag='',currentUrl='',running=false;let lastSeqAt=0;
 const img=document.getElementById('video'),state=document.getElementById('state'),placeholder=document.getElementById('placeholder'),stage=document.getElementById('stage'),button=document.getElementById('fullscreen');
 button.addEventListener('click',async()=>{
  try{if(document.fullscreenElement)await document.exitFullscreen();else await stage.requestFullscreen()}
@@ -41,12 +41,12 @@ async function poll(){
   else if(response.ok){
    etag=response.headers.get('ETag')||'';
    const url=URL.createObjectURL(await response.blob());
-   img.onload=()=>{if(currentUrl)URL.revokeObjectURL(currentUrl);currentUrl=url;img.style.display='block';placeholder.style.display='none'};
+   img.onload=()=>{if(currentUrl)URL.revokeObjectURL(currentUrl);currentUrl=url;img.style.display='block';placeholder.style.display='none';lastSeqAt=Date.now()};
    img.src=url;state.textContent='● Em direto · imagem recebida';
   }else{state.textContent='A aguardar imagens…';etag=''}
  }catch{state.textContent='Ligação interrompida · a tentar novamente'}
 }
-async function loop(){if(!document.hidden&&!running){running=true;try{await poll()}finally{running=false}}setTimeout(loop,document.hidden?2000:220)}
+async function loop(){if(!document.hidden&&!running){running=true;try{await poll()}finally{running=false}}setTimeout(loop,document.hidden?2000:(Date.now()-lastSeqAt>2000?400:120))}
 let audioContext=null,audioTag='',nextAudioTime=0,audioActive=false;
 const soundButton=document.getElementById('sound');
 soundButton.addEventListener('click',async()=>{
@@ -70,7 +70,7 @@ async function pollAudio(){
     for(let i=0;i<samples.length;i++)channel[i]=samples[i]/32768;
     const source=audioContext.createBufferSource();source.buffer=buffer;source.connect(audioContext.destination);
     const now=audioContext.currentTime;
-    if(nextAudioTime<now || nextAudioTime>now+.9)nextAudioTime=now+.08;
+    if(nextAudioTime<now || nextAudioTime>now+.5)nextAudioTime=now+.08;
     source.start(nextAudioTime);nextAudioTime+=buffer.duration;
    }else if(response.status===404){audioTag=''}
   }catch{}
