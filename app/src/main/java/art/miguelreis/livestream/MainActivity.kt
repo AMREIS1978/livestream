@@ -4,6 +4,7 @@ import android.app.*
 import android.content.*
 import android.graphics.Color
 import android.media.projection.MediaProjectionManager
+import android.media.projection.MediaProjectionConfig
 import android.os.Bundle
 import android.os.Build
 import android.provider.Settings
@@ -82,12 +83,12 @@ class MainActivity : Activity() {
   session = UUID.randomUUID().toString()
   publisherKey = UUID.randomUUID().toString() + UUID.randomUUID().toString()
   val mgr = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-  startActivityForResult(mgr.createScreenCaptureIntent(), requestCode)
+  startActivityForResult(if(Build.VERSION.SDK_INT>=34)mgr.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()) else mgr.createScreenCaptureIntent(), requestCode)
  }
 
  private fun beginRecording(){
   val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-  startActivityForResult(mgr.createScreenCaptureIntent(),recordRequestCode)
+  startActivityForResult(if(Build.VERSION.SDK_INT>=34)mgr.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay()) else mgr.createScreenCaptureIntent(),recordRequestCode)
  }
  private fun stopRecording(){
   startService(Intent(this,RecordService::class.java).apply{action="STOP"})
