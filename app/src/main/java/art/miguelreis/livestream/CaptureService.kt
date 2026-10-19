@@ -9,6 +9,11 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.*
+import android.graphics.Color
+import android.provider.Settings
+import android.view.Gravity
+import android.view.WindowManager
+import android.widget.TextView
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -24,6 +29,9 @@ class CaptureService: Service() {
  private var endpoint="";private var session="";private var publisherKey=""
  private var lastFrameAt=0L
  private var captureThread:HandlerThread?=null
+ private var overlayView:TextView?=null
+ private var overlayManager:WindowManager?=null
+ private var failures=0
  override fun onBind(intent:Intent?)=null
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
@@ -34,6 +42,14 @@ class CaptureService: Service() {
   val stop=PendingIntent.getService(this,0,Intent(this,CaptureService::class.java).apply{action="STOP"},PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
   val notification=Notification.Builder(this,"capture").setContentTitle("LiveStream em direto").setContentText("O ecrã está a ser partilhado").setSmallIcon(android.R.drawable.ic_menu_share).addAction(Notification.Action.Builder(null,"Parar",stop).build()).build()
   startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+  if(Settings.canDrawOverlays(this)) {
+   try {
+    overlayManager=getSystemService(WINDOW_SERVICE) as WindowManager
+    val label=TextView(this).apply { text="● EM DIRETO";textSize=13f;setTextColor(Color.WHITE);setBackgroundColor(Color.rgb(176,32,40));setPadding(18,9,18,9) }
+    val params=WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply { gravity=Gravity.TOP or Gravity.END;x=16;y=80 }
+    overlayManager?.addView(label,params);overlayView=label
+   }catch(_:Exception) { overlayView=null }
+  }
   val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
   @Suppress("DEPRECATION")
   val data=if(Build.VERSION.SDK_INT>=33)intent?.getParcelableExtra("resultData",Intent::class.java) else intent?.getParcelableExtra("resultData")
@@ -60,17 +76,27 @@ class CaptureService: Service() {
     val out=ByteArrayOutputStream();cropped.compress(Bitmap.CompressFormat.JPEG,48,out)
     val bytes=out.toByteArray();bmp.recycle();cropped.recycle()
     worker.execute { try {
-     val conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
-     conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=2500;conn.readTimeout=2500
-     conn.setRequestProperty("Content-Type","image/jpeg")
-     conn.setRequestProperty("X-Publish-Key",publisherKey)
-     conn.outputStream.use{it.write(bytes)}
-     try { conn.inputStream.close() } finally { conn.disconnect() }
-    } catch(_:Exception){} finally {busy.set(false)} }
+     var delivered=false
+     for(attempt in 0..1) {
+      var conn:HttpURLConnection?=null
+      try {
+       conn=URL("$endpoint/api/frame/$session").openConnection() as HttpURLConnection
+       conn.requestMethod="POST";conn.doOutput=true;conn.connectTimeout=3500;conn.readTimeout=3500
+       conn.setRequestProperty("Content-Type","image/jpeg")
+       conn.setRequestProperty("X-Publish-Key",publisherKey)
+       conn.outputStream.use{it.write(bytes)}
+       val code=conn.responseCode
+       if(code in 200..299) {delivered=true;break}
+       if(code in 400..499 && code!=429) break
+      }catch(_:Exception){} finally {conn?.disconnect()}
+      if(attempt==0) Thread.sleep(180)
+     }
+     failures=if(delivered) 0 else (failures+1).coerceAtMost(100)
+    } catch(_:InterruptedException){Thread.currentThread().interrupt()} finally {busy.set(false)} }
    } catch(_:Exception){busy.set(false)} finally{image.close()}
   },captureHandler)
   display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)
   return START_NOT_STICKY
  }
- override fun onDestroy(){reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();worker.shutdownNow();super.onDestroy()}
+ override fun onDestroy(){overlayView?.let { try {overlayManager?.removeView(it)}catch(_:Exception){} };overlayView=null;reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();worker.shutdownNow();super.onDestroy()}
 }
