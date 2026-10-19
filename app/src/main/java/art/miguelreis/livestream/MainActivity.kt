@@ -35,6 +35,13 @@ class MainActivity : Activity() {
  private lateinit var saveLiveCheck:CheckBox
  private lateinit var captureMode:RadioGroup
  private var shareEntireScreen=true
+ private var live=false
+ private fun updateLiveControls(){
+  if(!live)return
+  cameraPreview.stop();cameraPreview.visibility=android.view.View.GONE
+  previewLabel.text="Câmara integrada na transmissão · pré-visualização indisponível durante a partilha"
+  startService(Intent(this,CaptureService::class.java).apply{action="CONTROL";putExtra("cameraMode",when(cameraMode.checkedRadioButtonId){3001->1;3002->2;else->0});putExtra("micEnabled",micCheck.isChecked)})
+ }
  private fun shareContent(){
   val raw=contentInput.text.toString().trim()
   if(raw.isBlank()){Toast.makeText(this,"Cole primeiro o link do conteúdo",Toast.LENGTH_SHORT).show();return}
@@ -111,6 +118,7 @@ class MainActivity : Activity() {
   startService(Intent(this, CaptureService::class.java).apply { action = "STOP" })
   session = ""
   publisherKey = ""
+  live=false
   status.text = if(saveLiveCheck.isChecked) "Partilha terminada · vídeo guardado em Filmes/LiveStream" else "Partilha terminada"
   startButton.isEnabled = true
   saveLiveCheck.isEnabled=true
@@ -150,7 +158,7 @@ class MainActivity : Activity() {
    setTypeface(null,android.graphics.Typeface.BOLD);setPadding(0,dp(16),0,dp(10))
   }
   root.addView(title)
-  root.addView(label("Partilha o teu ecrã com um simples link. Quem recebe só precisa de abrir.",15f,muted).apply {setPadding(0,0,0,dp(24))})
+  root.addView(label("Partilhe o ecrã e explique com a sua imagem e voz.",15f,muted).apply {setPadding(0,0,0,dp(12))})
   val card=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL;background=rounded(cardColor)
    setPadding(dp(20),dp(20),dp(20),dp(20))
@@ -179,21 +187,31 @@ class MainActivity : Activity() {
   saveLiveCheck=CheckBox(this).apply{text="Gravar também esta transmissão (MP4)";isChecked=false;setTextColor(Color.rgb(24,36,56))}
   card.addView(saveLiveCheck)
   micCheck=CheckBox(this).apply{text="Transmitir som do microfone";isChecked=false;setTextColor(Color.rgb(24,36,56))}
-  card.addView(micCheck)
-  card.addView(label("CÂMARA NA TRANSMISSÃO (OPCIONAL)",12f,muted))
+  micCheck.setOnCheckedChangeListener { _,checked ->
+   if(checked && checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO),microphoneRequestCode)}else updateLiveControls()
+  }
+  root.addView(micCheck,1)
+  val cameraHero=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;background=rounded(cardColor);setPadding(dp(14),dp(12),dp(14),dp(14))}
+  root.addView(cameraHero,1)
+  cameraHero.addView(label("A SUA IMAGEM · CÂMARA",17f,accent).apply{setTypeface(null,android.graphics.Typeface.BOLD)})
+  cameraHero.addView(label("Mostre o rosto enquanto explica o ecrã. Pode alterar a câmara a qualquer momento.",12f,muted))
   cameraMode=RadioGroup(this).apply{
    orientation=RadioGroup.VERTICAL
    addView(RadioButton(this@MainActivity).apply{id=3000;text="Desligada";isChecked=true;setTextColor(Color.rgb(24,36,56))})
    addView(RadioButton(this@MainActivity).apply{id=3001;text="Câmara frontal";setTextColor(Color.rgb(24,36,56))})
    addView(RadioButton(this@MainActivity).apply{id=3002;text="Câmara traseira";setTextColor(Color.rgb(24,36,56))})
   }
-  card.addView(cameraMode)
+  cameraHero.addView(cameraMode)
   previewLabel=label("Pré-visualização da câmara (apenas nesta página)",12f,muted)
-  card.addView(previewLabel)
-  card.addView(label("A câmara aparece nesta página antes de começar e será incorporada no vídeo partilhado. Não é uma janela flutuante.",12f,muted))
+  cameraHero.addView(previewLabel)
+  cameraHero.addView(label("Pré-visualização antes de transmitir; durante a transmissão, a imagem é incorporada no vídeo.",12f,muted))
   cameraPreview=CameraPreview(this).apply{visibility=android.view.View.GONE}
-  card.addView(cameraPreview,LinearLayout.LayoutParams(-1,dp(190)))
+  cameraHero.addView(cameraPreview,LinearLayout.LayoutParams(-1,dp(270)))
   cameraMode.setOnCheckedChangeListener { _,selected ->
+   if(live){
+    if(selected!=3000 && checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.CAMERA),cameraRequestCode)}else updateLiveControls()
+    return@setOnCheckedChangeListener
+   }
    cameraPreview.stop()
    if(selected==3000){cameraPreview.visibility=android.view.View.GONE;previewLabel.text="Câmara desligada"}
    else if(checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){
@@ -272,7 +290,7 @@ class MainActivity : Activity() {
   super.onRequestPermissionsResult(requestCode,permissions,grantResults)
   if(requestCode==cameraRequestCode){
    if(grantResults.firstOrNull()==PackageManager.PERMISSION_GRANTED){
-    if(cameraMode.checkedRadioButtonId!=3000){cameraPreview.visibility=android.view.View.VISIBLE;cameraPreview.showCamera(cameraMode.checkedRadioButtonId==3001)}
+    if(cameraMode.checkedRadioButtonId!=3000){if(live)updateLiveControls() else{cameraPreview.visibility=android.view.View.VISIBLE;cameraPreview.showCamera(cameraMode.checkedRadioButtonId==3001)}}
    }else{cameraMode.check(3000);Toast.makeText(this,"Câmara desativada",Toast.LENGTH_SHORT).show()}
   }
   if(requestCode==microphoneRequestCode){
@@ -296,6 +314,7 @@ class MainActivity : Activity() {
   if (requestCode != this.requestCode) return
   if (resultCode == RESULT_OK && data != null) {
    cameraPreview.stop()
+   live=true
    startForegroundService(Intent(this, CaptureService::class.java).apply {
     putExtra("resultCode", resultCode)
     putExtra("resultData", data)
@@ -310,8 +329,8 @@ class MainActivity : Activity() {
    status.text = if(saveLiveCheck.isChecked) "A transmitir e gravar · a estabelecer ligação" else "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
    saveLiveCheck.isEnabled=false
-   micCheck.isEnabled=false
-   for(i in 0 until cameraMode.childCount)cameraMode.getChildAt(i).isEnabled=false
+   micCheck.isEnabled=true
+   for(i in 0 until cameraMode.childCount)cameraMode.getChildAt(i).isEnabled=true
    captureMode.isEnabled=false
    for(i in 0 until captureMode.childCount)captureMode.getChildAt(i).isEnabled=false
    recordButton.isEnabled=false
