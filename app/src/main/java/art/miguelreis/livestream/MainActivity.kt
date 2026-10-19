@@ -99,7 +99,14 @@ class MainActivity : Activity() {
 
  private fun begin() {
   pendingStart=true
-  if(cameraMode.checkedRadioButtonId!=3000 && overlayPrefs.getBoolean("allowOverlay",false) && !Settings.canDrawOverlays(this)){
+  if(!overlayPrefs.contains("allowOverlay")){
+   AlertDialog.Builder(this).setTitle("Controlos flutuantes durante a transmissão?")
+    .setMessage("Sim: mostra uma janela sobre as outras aplicações para controlar câmara, microfone e terminar a transmissão. O Android pedirá autorização uma única vez.")
+    .setPositiveButton("Sim"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",true).apply();awaitingOverlay=true;requestOverlayPermission()}
+    .setNegativeButton("Não"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",false).apply();beginWithoutOverlay()}.show()
+   return
+  }
+  if(overlayPrefs.getBoolean("allowOverlay",false) && !Settings.canDrawOverlays(this)){
    AlertDialog.Builder(this).setTitle("Autorizar a janela do apresentador")
     .setMessage("Escolheu mostrar a câmara sobre outras aplicações. O Android precisa de autorizar esta função. Pode continuar sem a janela.")
     .setPositiveButton("Autorizar"){_,_->awaitingOverlay=true;requestOverlayPermission()}
@@ -394,7 +401,7 @@ class MainActivity : Activity() {
     putExtra("saveAlongside",saveLiveCheck.isChecked)
     putExtra("micEnabled",micCheck.isChecked)
     putExtra("cameraMode",when(cameraMode.checkedRadioButtonId){3001->1;3002->2;else->0})
-    putExtra("overlayEnabled",overlayPrefs.getBoolean("allowOverlay",false))
+    putExtra("overlayEnabled",overlayPrefs.getBoolean("allowOverlay",false) && Settings.canDrawOverlays(this))
    })
    status.text = if(saveLiveCheck.isChecked) "A transmitir e gravar · a estabelecer ligação" else "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
