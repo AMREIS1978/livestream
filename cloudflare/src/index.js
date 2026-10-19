@@ -22,9 +22,9 @@ footer{color:#b7c1d2;font-size:13px;display:flex;align-items:center;justify-cont
 #stage:fullscreen #placeholder{font-size:20px}
 @media(max-width:520px){header{flex-wrap:wrap}.brand{font-size:16px}button{padding:10px 12px}footer{font-size:11px}}
 </style></head>
-<body><main class="page"><header><div class="brand"><span>●</span> LiveStream <small style="font-weight:400;color:#aebbd2">· Em direto</small></div><div class="actions"><button id="fullscreen" type="button" aria-label="Ver em ecrã inteiro">⛶ Ecrã inteiro</button></div></header>
+<body><main class="page"><header><div class="brand"><span>●</span> LiveStream <small style="font-weight:400;color:#aebbd2">· Em direto</small></div><div class="actions"><button id="sound" type="button" aria-label="Ativar som">🔇 Ativar som</button><button id="fullscreen" type="button" aria-label="Ver em ecrã inteiro">⛶ Ecrã inteiro</button></div></header>
 <section id="stage"><img id="video" alt="Ecrã partilhado em direto"><div id="placeholder">A aguardar transmissão…</div></section>
-<footer><span id="state" role="status">A ligar…</span><span>Sem áudio · ESC para sair do ecrã inteiro</span></footer></main>
+<footer><span id="state" role="status">A ligar…</span><span>Som opcional · ESC para sair do ecrã inteiro</span></footer></main>
 <script>
 const id=${JSON.stringify(id)};
 let etag='',currentUrl='',running=false;
@@ -47,13 +47,43 @@ async function poll(){
  }catch{state.textContent='Ligação interrompida · a tentar novamente'}
 }
 async function loop(){if(!document.hidden&&!running){running=true;try{await poll()}finally{running=false}}setTimeout(loop,document.hidden?2000:220)}
-loop();
+let audioContext=null,audioTag='',nextAudioTime=0,audioActive=false;
+const soundButton=document.getElementById('sound');
+soundButton.addEventListener('click',async()=>{
+ if(audioActive){audioActive=false;soundButton.textContent='🔇 Ativar som';return}
+ try{
+  audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();
+  await audioContext.resume();nextAudioTime=audioContext.currentTime+.12;
+  audioActive=true;soundButton.textContent='🔊 Desativar som';
+ }catch{state.textContent='O navegador bloqueou a reprodução do áudio'}
+});
+async function pollAudio(){
+ if(audioActive && audioContext && !document.hidden){
+  try{
+   const response=await fetch('/api/audio/'+id,{cache:'no-store',headers:audioTag?{'If-None-Match':audioTag}:{}});
+   if(response.ok){
+    audioTag=response.headers.get('ETag')||'';
+    const bytes=await response.arrayBuffer();
+    const samples=new Int16Array(bytes);
+    const buffer=audioContext.createBuffer(1,samples.length,16000);
+    const channel=buffer.getChannelData(0);
+    for(let i=0;i<samples.length;i++)channel[i]=samples[i]/32768;
+    const source=audioContext.createBufferSource();source.buffer=buffer;source.connect(audioContext.destination);
+    const now=audioContext.currentTime;
+    if(nextAudioTime<now || nextAudioTime>now+.9)nextAudioTime=now+.08;
+    source.start(nextAudioTime);nextAudioTime+=buffer.duration;
+   }else if(response.status===404){audioTag=''}
+  }catch{}
+ }
+ setTimeout(pollAudio,140);
+}
+loop();pollAudio();
 </script></body></html>`;
 export default {
  async fetch(request,env){
   const url=new URL(request.url);
   if(url.pathname==="/health")return new Response(JSON.stringify({ok:true}),{headers:{"Content-Type":"application/json",...headers}});
-  const match=url.pathname.match(/^\/(api\/frame|api\/signal|watch)\/([0-9a-f-]{36})$/);
+  const match=url.pathname.match(/^\/(api\/frame|api\/signal|api\/audio|watch)\/([0-9a-f-]{36})$/);
   if(!match || !validId.test(match[2]))return text("Not found",404);
   const [,kind,id]=match;
   if(kind==="watch"){
@@ -65,9 +95,27 @@ export default {
  }
 };
 export class StreamRoom {
- constructor(ctx,env){this.ctx=ctx;this.key=null;this.frame=null;this.updated=0;this.sequence=0;this.signals=[]}
+ constructor(ctx,env){this.ctx=ctx;this.key=null;this.frame=null;this.updated=0;this.sequence=0;this.signals=[];this.audio=null;this.audioSeq=0;this.audioUpdated=0}
  async fetch(request){
   const now=Date.now();
+  if(new URL(request.url).pathname.includes("/api/audio/")){
+   if(request.method==="POST"){
+    const key=request.headers.get("X-Publish-Key")||"";
+    if(!this.key || key!==this.key)return text("Forbidden",403);
+    if(request.headers.get("Content-Type")!=="application/octet-stream")return text("Invalid audio",415);
+    const data=await request.arrayBuffer();
+    if(data.byteLength<256 || data.byteLength>16384 || data.byteLength%2!==0)return text("Invalid audio chunk",413);
+    this.audio=data;this.audioUpdated=now;this.audioSeq++;
+    return new Response(null,{status:204,headers});
+   }
+   if(request.method==="GET"){
+    if(!this.audio || now-this.audioUpdated>2500)return text("No audio",404);
+    const tag='"'+this.audioSeq+'"';
+    if(request.headers.get("If-None-Match")===tag)return new Response(null,{status:304,headers:{"ETag":tag,...headers}});
+    return new Response(this.audio,{headers:{"Content-Type":"application/octet-stream","ETag":tag,...headers}});
+   }
+   return text("Method not allowed",405);
+  }
   if(new URL(request.url).pathname.includes("/api/signal/")){
    if(request.method==="POST"){
     const key=request.headers.get("X-Publish-Key")||"";
