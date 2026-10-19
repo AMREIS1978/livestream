@@ -33,6 +33,10 @@ class CaptureService: Service() {
  @Volatile private var micEnabled=false
  @Volatile private var cameraMode=0
  private var cameraInset:CameraInset?=null
+ private var cameraX=.78f
+ private var cameraY=.14f
+ private var cameraSize=.26f
+ private fun configureCamera(){cameraInset?.let{it.positionX=cameraX;it.positionY=cameraY;it.sizeFraction=cameraSize}}
  private var audioRecorder:AudioRecord?=null
  private var audioThread:Thread?=null
  @Volatile private var audioRunning=false
@@ -65,9 +69,13 @@ class CaptureService: Service() {
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
   if(intent?.action=="CONTROL"){
+   cameraX=intent.getFloatExtra("cameraX",cameraX).coerceIn(0f,1f)
+   cameraY=intent.getFloatExtra("cameraY",cameraY).coerceIn(0f,1f)
+   cameraSize=intent.getFloatExtra("cameraSize",cameraSize).coerceIn(.14f,.50f)
    val nextCamera=intent.getIntExtra("cameraMode",cameraMode)
    val nextMic=intent.getBooleanExtra("micEnabled",micEnabled)
    if(nextCamera!=cameraMode){cameraInset?.stop();cameraInset=null;cameraMode=nextCamera;if(cameraMode!=0 && checkSelfPermission(Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED){cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start())cameraInset=null}}}
+   configureCamera()
    if(nextMic!=micEnabled){micEnabled=nextMic;if(micEnabled && checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)startMicrophone() else stopMicrophone()}
    return START_NOT_STICKY
   }
@@ -184,6 +192,7 @@ class CaptureService: Service() {
   try{display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)}catch(e:Exception){lastError="Não foi possível iniciar o ecrã: "+e.javaClass.simpleName;reportState(false);stopSelf();return START_NOT_STICKY}
   if(micEnabled)startMicrophone()
   if(cameraMode!=0){try{cameraInset=CameraInset(this,cameraMode==1).also{if(!it.start()){cameraInset=null;lastError="Câmara indisponível"}}}catch(_:Exception){cameraInset=null;lastError="Câmara não disponível"}}
+  configureCamera()
   reportState(false)
   return START_NOT_STICKY
  }
