@@ -84,7 +84,7 @@ class MainActivity : Activity() {
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
   val filter=IntentFilter("art.miguelreis.livestream.STATUS")
-  if(Build.VERSION.SDK_INT>=33)registerReceiver(connectionReceiver,filter,Context.RECEIVER_NOT_EXPORTED) else @Suppress("DEPRECATION") registerReceiver(connectionReceiver,filter)
+  if(Build.VERSION.SDK_INT>=33)registerReceiver(connectionReceiver,filter,Context.RECEIVER_NOT_EXPORTED) else { @Suppress("DEPRECATION") registerReceiver(connectionReceiver,filter) }
   if(intent?.action==Intent.ACTION_SEND && intent.type=="text/plain") sharedText=intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().take(500)
   val root = LinearLayout(this).apply {
    orientation = LinearLayout.VERTICAL
