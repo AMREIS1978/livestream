@@ -14,6 +14,8 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.TextView
+import android.widget.LinearLayout
+import android.widget.Button
 import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
@@ -29,14 +31,15 @@ class CaptureService: Service() {
  private var endpoint="";private var session="";private var publisherKey=""
  private var lastFrameAt=0L
  private var captureThread:HandlerThread?=null
- private var overlayView:TextView?=null
+ private var overlayView:LinearLayout?=null
+ private var sharedText=""
  private var overlayManager:WindowManager?=null
  private var failures=0
  override fun onBind(intent:Intent?)=null
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
   if(projection!=null)return START_NOT_STICKY
-  endpoint=intent?.getStringExtra("endpoint")?:"";session=intent?.getStringExtra("session")?:"";publisherKey=intent?.getStringExtra("publisherKey")?:""
+  endpoint=intent?.getStringExtra("endpoint")?:"";session=intent?.getStringExtra("session")?:"";publisherKey=intent?.getStringExtra("publisherKey")?:"";sharedText=intent?.getStringExtra("sharedText")?:""
   val channel=NotificationChannel("capture","Partilha de ecrã",NotificationManager.IMPORTANCE_LOW)
   (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
   val stop=PendingIntent.getService(this,0,Intent(this,CaptureService::class.java).apply{action="STOP"},PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -45,9 +48,17 @@ class CaptureService: Service() {
   if(Settings.canDrawOverlays(this)) {
    try {
     overlayManager=getSystemService(WINDOW_SERVICE) as WindowManager
-    val label=TextView(this).apply { text="● EM DIRETO";textSize=13f;setTextColor(Color.WHITE);setBackgroundColor(Color.rgb(176,32,40));setPadding(18,9,18,9) }
-    val params=WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply { gravity=Gravity.TOP or Gravity.END;x=16;y=80 }
-    overlayManager?.addView(label,params);overlayView=label
+    val panel=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL;setBackgroundColor(Color.rgb(160,22,38));setPadding(8,4,8,4) }
+    val live=TextView(this).apply { text="● EM DIRETO";textSize=12f;setTextColor(Color.WHITE);setPadding(10,10,10,10) }
+    val send=Button(this).apply { text="PARTILHAR";textSize=11f;setOnClickListener {
+     val link="$endpoint/watch/$session"
+     val msg="Vê isto 👀 Estou a partilhar o meu ecrã em direto: $link"+if(sharedText.isNotBlank()) "\\nConteúdo: $sharedText" else ""
+     val share=Intent(Intent.ACTION_SEND).apply { type="text/plain";putExtra(Intent.EXTRA_TEXT,msg);addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+     try {startActivity(Intent.createChooser(share,"Enviar link").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))}catch(_:Exception){}
+    } }
+    panel.addView(live);panel.addView(send)
+    val params=WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.WRAP_CONTENT,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT).apply { gravity=Gravity.TOP or Gravity.END;x=8;y=80 }
+    overlayManager?.addView(panel,params);overlayView=panel
    }catch(_:Exception) { overlayView=null }
   }
   val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
