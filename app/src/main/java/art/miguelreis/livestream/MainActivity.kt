@@ -22,6 +22,7 @@ class MainActivity : Activity() {
  private lateinit var copyAction: Button
  private var session = ""
  private var publisherKey = ""
+ private var sharedText = ""
  private val endpoint get() = BuildConfig.RELAY_URL.trimEnd('/')
 
  private fun shareLink() = "$endpoint/watch/$session"
@@ -35,7 +36,7 @@ class MainActivity : Activity() {
   val link = shareLink()
   val send = Intent(Intent.ACTION_SEND).apply {
    type = "text/plain"
-   putExtra(Intent.EXTRA_TEXT, "Estou a partilhar o meu ecrã. Abra este link para acompanhar: $link")
+   putExtra(Intent.EXTRA_TEXT, "Vê isto 👀 Estou a partilhar o meu ecrã em direto: $link" + if(sharedText.isNotBlank()) "\\nConteúdo: $sharedText" else "")
   }
   // O utilizador escolhe o WhatsApp ou outra aplicação, sem precisar de copiar o link.
   startActivity(Intent.createChooser(send, "Enviar convite"))
@@ -73,6 +74,7 @@ class MainActivity : Activity() {
 
  override fun onCreate(savedInstanceState: Bundle?) {
   super.onCreate(savedInstanceState)
+  if(intent?.action==Intent.ACTION_SEND && intent.type=="text/plain") sharedText=intent.getStringExtra(Intent.EXTRA_TEXT).orEmpty().take(500)
   val root = LinearLayout(this).apply {
    orientation = LinearLayout.VERTICAL
    setPadding(36, 64, 36, 36)
@@ -86,6 +88,7 @@ class MainActivity : Activity() {
   }
   root.addView(label("LiveStream", 32f))
   root.addView(label("Partilhe o ecrã como numa chamada.", 18f))
+  if(sharedText.isNotBlank())root.addView(label("Conteúdo recebido de outra aplicação. Toque em PARTILHAR ECRÃ para começar.",15f))
   status = label("Pronta para partilhar", 16f)
   root.addView(status)
   startButton = Button(this).apply {
@@ -107,7 +110,7 @@ class MainActivity : Activity() {
   val copyButton=Button(this).apply { text="COPIAR LINK";isEnabled=false;setOnClickListener { copyInvite() } }
   root.addView(copyButton)
   inviteAction=inviteButton;copyAction=copyButton
-  root.addView(label("Depois de autorizar a captura, escolha a pessoa a quem quer enviar o convite. A partilha continua ao abrir outras aplicações.", 15f))
+  root.addView(label("Noutra aplicação: toque em Partilhar → LiveStream. Depois escolha ecrã inteiro ou uma aplicação, conforme as opções do Android. Durante a transmissão, use o botão flutuante para reenviar o link.", 15f))
   root.addView(label("Versão experimental: imagens sucessivas, sem áudio. Algumas aplicações bloqueiam conteúdos protegidos.", 13f))
   setContentView(root)
  }
@@ -124,6 +127,7 @@ class MainActivity : Activity() {
     putExtra("endpoint", endpoint)
     putExtra("session", session)
     putExtra("publisherKey", publisherKey)
+    putExtra("sharedText",sharedText)
    })
    status.text = "Captura iniciada · a estabelecer ligação"
    startButton.isEnabled = false
