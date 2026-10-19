@@ -6,6 +6,11 @@ import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.media.ImageReader
+import android.media.AudioRecord
+import android.media.AudioFormat
+import android.media.MediaRecorder
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.*
@@ -25,6 +30,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class CaptureService: Service() {
  private var projection:MediaProjection?=null
+ private var micEnabled=false
+ private var audioRecorder:AudioRecord?=null
+ private var audioThread:Thread?=null
+ @Volatile private var audioRunning=false
  private var reader:ImageReader?=null
  private var display:android.hardware.display.VirtualDisplay?=null
  private val worker=Executors.newSingleThreadExecutor()
@@ -36,8 +45,8 @@ class CaptureService: Service() {
  private var saveAlongside=false
  private var sharedRecorder:SharedFrameRecorder?=null
  private var failures=0
- private var jpegQuality=70
- private var intervalMs=260L
+ private var jpegQuality=60
+ private var intervalMs=180L
  private var lastUploadMs=0L
  private var lastHttpStatus=0
  private var lastError=""
@@ -52,12 +61,13 @@ class CaptureService: Service() {
  override fun onStartCommand(intent:Intent?,flags:Int,startId:Int):Int {
   if(intent?.action=="STOP"){stopSelf();return START_NOT_STICKY}
   if(projection!=null)return START_NOT_STICKY
-  endpoint=intent?.getStringExtra("endpoint")?:"";session=intent?.getStringExtra("session")?:"";publisherKey=intent?.getStringExtra("publisherKey")?:"";sharedText=intent?.getStringExtra("sharedText")?:"";saveAlongside=intent?.getBooleanExtra("saveAlongside",false)==true
+  endpoint=intent?.getStringExtra("endpoint")?:"";session=intent?.getStringExtra("session")?:"";publisherKey=intent?.getStringExtra("publisherKey")?:"";sharedText=intent?.getStringExtra("sharedText")?:"";saveAlongside=intent?.getBooleanExtra("saveAlongside",false)==true;micEnabled=intent?.getBooleanExtra("micEnabled",false)==true && checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED
   val channel=NotificationChannel("capture","Partilha de ecrã",NotificationManager.IMPORTANCE_LOW)
   (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)
   val stop=PendingIntent.getService(this,0,Intent(this,CaptureService::class.java).apply{action="STOP"},PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
   val notification=Notification.Builder(this,"capture").setContentTitle("LiveStream em direto").setContentText("O ecrã está a ser partilhado").setSmallIcon(android.R.drawable.ic_menu_share).addAction(Notification.Action.Builder(null,"Parar",stop).build()).build()
-  startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+  startForeground(1,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or if(micEnabled)ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0)
+  if(micEnabled)startMicrophone()
   val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
   @Suppress("DEPRECATION")
   val data=if(Build.VERSION.SDK_INT>=33)intent?.getParcelableExtra("resultData",Intent::class.java) else intent?.getParcelableExtra("resultData")
@@ -68,7 +78,7 @@ class CaptureService: Service() {
   val captureHandler=Handler(captureThread!!.looper)
   projection?.registerCallback(object:MediaProjection.Callback(){override fun onStop(){stopSelf()}},handler)
   val metrics=resources.displayMetrics
-  val scale=(960f / metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
+  val scale=(800f / metrics.widthPixels.coerceAtLeast(metrics.heightPixels)).coerceAtMost(1f)
   val w=((metrics.widthPixels*scale).toInt().coerceAtLeast(2)/2)*2;val h=((metrics.heightPixels*scale).toInt().coerceAtLeast(2)/2)*2
   if(saveAlongside)sharedRecorder=SharedFrameRecorder(this,w,h).also{if(!it.start()){sharedRecorder=null;lastError="Não foi possível iniciar a gravação"}}
   reader=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,2)
@@ -126,9 +136,9 @@ class CaptureService: Service() {
          lastUploadMs=duration
          failures=if(delivered)0 else (failures+1).coerceAtMost(100)
          if(delivered && duration<350){
-          jpegQuality=(jpegQuality+2).coerceAtMost(78);intervalMs=220L
+          jpegQuality=(jpegQuality+2).coerceAtMost(78);intervalMs=170L
          }else if(delivered && duration<800){
-          jpegQuality=jpegQuality.coerceAtMost(68);intervalMs=300L
+          jpegQuality=jpegQuality.coerceAtMost(68);intervalMs=240L
          }else{
           jpegQuality=(jpegQuality-8).coerceAtLeast(30)
           intervalMs=if(failures>2)850L else 480L
@@ -152,5 +162,35 @@ class CaptureService: Service() {
   display=projection?.createVirtualDisplay("LiveStream",w,h,metrics.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,reader?.surface,null,handler)
   return START_NOT_STICKY
  }
- override fun onDestroy(){reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();super.onDestroy()}
+  private fun startMicrophone(){
+  try{
+   val rate=16000
+   val minimum=AudioRecord.getMinBufferSize(rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT)
+   if(minimum<=0)return
+   val recorder=AudioRecord(MediaRecorder.AudioSource.MIC,rate,AudioFormat.CHANNEL_IN_MONO,AudioFormat.ENCODING_PCM_16BIT,maxOf(minimum,8192))
+   if(recorder.state!=AudioRecord.STATE_INITIALIZED){recorder.release();return}
+   audioRecorder=recorder
+   recorder.startRecording()
+   audioRunning=true
+   audioThread=Thread({
+    val chunk=ByteArray(8192)
+    while(audioRunning && !Thread.currentThread().isInterrupted){
+     val count=try{recorder.read(chunk,0,chunk.size)}catch(_:Exception){break}
+     if(count>0){
+      var connection:HttpURLConnection?=null
+      try{
+       connection=URL("$endpoint/api/audio/$session").openConnection() as HttpURLConnection
+       connection.requestMethod="POST";connection.doOutput=true
+       connection.connectTimeout=900;connection.readTimeout=900
+       connection.setRequestProperty("Content-Type","application/octet-stream")
+       connection.setRequestProperty("X-Publish-Key",publisherKey)
+       connection.outputStream.use{it.write(chunk,0,count)}
+       connection.responseCode
+      }catch(_:Exception){}finally{connection?.disconnect()}
+     }
+    }
+   },"LiveStreamAudio").apply{isDaemon=true;start()}
+  }catch(_:Exception){audioRunning=false}
+ }
+ override fun onDestroy(){audioRunning=false;try{audioRecorder?.stop()}catch(_:Exception){};try{audioRecorder?.release()}catch(_:Exception){};audioRecorder=null;audioThread?.interrupt();reader?.setOnImageAvailableListener(null,null);display?.release();reader?.close();projection?.stop();captureThread?.quitSafely();val recorderToFinish=sharedRecorder;sharedRecorder=null;try{worker.execute { try{recorderToFinish?.finish()}catch(_:Exception){} }}catch(_:java.util.concurrent.RejectedExecutionException){};worker.shutdown();super.onDestroy()}
 }
