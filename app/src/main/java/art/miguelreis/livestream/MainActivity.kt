@@ -19,6 +19,17 @@ class MainActivity : Activity() {
  private val microphoneRequestCode = 126
  private val cameraRequestCode = 127
  private val overlayRequestCode = 128
+ private val overlayPrefs by lazy{getSharedPreferences("presenter",MODE_PRIVATE)}
+ private fun askOverlayPreference(){
+  if(overlayPrefs.contains("allowOverlay"))return
+  AlertDialog.Builder(this).setTitle("Mostrar o apresentador sobre todas as aplicações?")
+   .setMessage("Sim: quando iniciar uma transmissão com câmara, a sua imagem aparece automaticamente sobre as outras aplicações. Pode arrastá-la, redimensioná-la e desligá-la. Não: a transmissão continua sem a janela flutuante. Pode alterar esta escolha mais tarde.")
+   .setPositiveButton("Sim, ativar"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",true).apply();requestOverlayPermission()}
+   .setNegativeButton("Não"){_,_->overlayPrefs.edit().putBoolean("allowOverlay",false).apply()}.show()
+ }
+ private fun requestOverlayPermission(){
+  if(!Settings.canDrawOverlays(this))startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")),overlayRequestCode)
+ }
  private lateinit var cameraMode:RadioGroup
  private lateinit var cameraPreview:CameraPreview
  private lateinit var placement:CameraPlacementView
@@ -85,11 +96,11 @@ class MainActivity : Activity() {
  }
 
  private fun begin() {
-  if(cameraMode.checkedRadioButtonId!=3000 && !Settings.canDrawOverlays(this)){
-   AlertDialog.Builder(this).setTitle("Controlar a câmara sobre outras aplicações")
-    .setMessage("Para arrastar, aumentar, diminuir e desligar a câmara enquanto utiliza outras aplicações, autorize o LiveStream a aparecer sobre outras apps. A autorização é opcional.")
-    .setPositiveButton("Autorizar"){_,_->startActivityForResult(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")),overlayRequestCode)}
-    .setNegativeButton("Continuar sem janela"){_,_->beginWithoutOverlay()}.show()
+  if(cameraMode.checkedRadioButtonId!=3000 && overlayPrefs.getBoolean("allowOverlay",false) && !Settings.canDrawOverlays(this)){
+   AlertDialog.Builder(this).setTitle("Autorizar a janela do apresentador")
+    .setMessage("Escolheu mostrar a câmara sobre outras aplicações. O Android precisa de autorizar esta função. Pode continuar sem a janela.")
+    .setPositiveButton("Autorizar"){_,_->requestOverlayPermission()}
+    .setNegativeButton("Continuar sem sobreposição"){_,_->beginWithoutOverlay()}.show()
    return
   }
   beginWithoutOverlay()
@@ -173,7 +184,7 @@ class MainActivity : Activity() {
    setTypeface(null,android.graphics.Typeface.BOLD);setPadding(0,dp(16),0,dp(10))
   }
   root.addView(title)
-  root.addView(label("Partilhe o ecrã e explique com a sua imagem e voz. Durante a transmissão, arraste a janela do apresentador sobre qualquer aplicação.",15f,muted).apply {setPadding(0,0,0,dp(12))})
+  root.addView(label("Partilhe o ecrã e explique com a sua imagem e voz. Arraste a janela vertical do apresentador enquanto utiliza outras aplicações.",15f,muted).apply {setPadding(0,0,0,dp(12))})
   val card=LinearLayout(this).apply {
    orientation=LinearLayout.VERTICAL;background=rounded(cardColor)
    setPadding(dp(20),dp(20),dp(20),dp(20))
@@ -329,8 +340,8 @@ class MainActivity : Activity() {
  override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
   super.onActivityResult(requestCode, resultCode, data)
   if(requestCode==overlayRequestCode){
-   if(Settings.canDrawOverlays(this))Toast.makeText(this,"Controlo flutuante autorizado",Toast.LENGTH_SHORT).show()
-   beginWithoutOverlay();return
+   Toast.makeText(this,if(Settings.canDrawOverlays(this))"Janela do apresentador autorizada" else "Sobreposição não autorizada",Toast.LENGTH_SHORT).show()
+   return
   }
   if(requestCode==recordRequestCode){
    if(resultCode==RESULT_OK && data!=null){
