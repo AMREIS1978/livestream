@@ -18,6 +18,8 @@ class MainActivity : Activity() {
  private val cameraRequestCode = 127
  private lateinit var cameraMode:RadioGroup
  private lateinit var cameraPreview:CameraPreview
+ private lateinit var placement:CameraPlacementView
+ private lateinit var cameraSizeSeek:SeekBar
  private lateinit var previewLabel:TextView
  private lateinit var micCheck:CheckBox
  private val recordRequestCode = 125
@@ -40,7 +42,7 @@ class MainActivity : Activity() {
   if(!live)return
   cameraPreview.stop();cameraPreview.visibility=android.view.View.GONE
   previewLabel.text="Câmara integrada na transmissão · pré-visualização indisponível durante a partilha"
-  startService(Intent(this,CaptureService::class.java).apply{action="CONTROL";putExtra("cameraMode",when(cameraMode.checkedRadioButtonId){3001->1;3002->2;else->0});putExtra("micEnabled",micCheck.isChecked)})
+  startService(Intent(this,CaptureService::class.java).apply{action="CONTROL";putExtra("cameraMode",when(cameraMode.checkedRadioButtonId){3001->1;3002->2;else->0});putExtra("micEnabled",micCheck.isChecked);putExtra("cameraX",placement.xFraction);putExtra("cameraY",placement.yFraction);putExtra("cameraSize",placement.sizeFraction)})
  }
  private fun shareContent(){
   val raw=contentInput.text.toString().trim()
@@ -207,6 +209,17 @@ class MainActivity : Activity() {
   cameraHero.addView(label("Pré-visualização antes de transmitir; durante a transmissão, a imagem é incorporada no vídeo.",12f,muted))
   cameraPreview=CameraPreview(this).apply{visibility=android.view.View.GONE}
   cameraHero.addView(cameraPreview,LinearLayout.LayoutParams(-1,dp(270)))
+  cameraHero.addView(label("POSIÇÃO DA CÂMARA · ARRASTE O QUADRO AZUL",12f,muted))
+  placement=CameraPlacementView(this)
+  cameraHero.addView(placement,LinearLayout.LayoutParams(-1,dp(200)))
+  placement.onPlacementChanged={updateLiveControls()}
+  cameraHero.addView(label("TAMANHO DA CÂMARA",12f,muted))
+  cameraSizeSeek=SeekBar(this).apply{max=100;progress=33;setOnSeekBarChangeListener(object:SeekBar.OnSeekBarChangeListener{
+   override fun onProgressChanged(seekBar:SeekBar?,progress:Int,fromUser:Boolean){placement.sizeFraction=.14f+.36f*progress/100f;placement.invalidate();if(fromUser)updateLiveControls()}
+   override fun onStartTrackingTouch(seekBar:SeekBar?){}
+   override fun onStopTrackingTouch(seekBar:SeekBar?){}
+  })}
+  cameraHero.addView(cameraSizeSeek)
   cameraMode.setOnCheckedChangeListener { _,selected ->
    if(live){
     if(selected!=3000 && checkSelfPermission(Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED){requestPermissions(arrayOf(Manifest.permission.CAMERA),cameraRequestCode)}else updateLiveControls()
